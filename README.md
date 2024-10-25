@@ -1,93 +1,77 @@
-# Shell Scripting Toolkit
+# Project Name
 
 ## Project Description
-The Shell Scripting Toolkit is a collection of shell scripts that provide various utilities and functionalities to enhance the user's shell experience. The toolkit includes scripts for improving prompts, explaining shell commands, generating shell scripts, and more. These scripts leverage large language models (LLMs) to provide intelligent and contextual responses to the user's requests.
 
-## Installation
-To use the Shell Scripting Toolkit, you will need to have the following dependencies installed:
+This repository contains a collection of shell scripts and Python scripts that provide various utilities and functionalities for the project. The scripts are designed to enhance the user's experience and provide helpful tools for interacting with the system.
 
-1. A shell environment (e.g., Bash, Zsh)
-2. The `llm` command-line tool, which is used to interact with the LLM
-3. Optional: `pv` (Pipe Viewer) for better output formatting
+## Shell Scripts
 
-Once you have the dependencies installed, you can clone the repository and source the relevant scripts in your shell configuration file (e.g., `.bashrc`, `.zshrc`).
+### `shelllm.sh`
 
-```bash
-git clone https://github.com/your-username/shell-scripting-toolkit.git
+The `shelllm.sh` script is designed to improve a user's prompt based on their request. It utilizes a large language model (LLM) to generate a more verbose and informative prompt, with the level of verbosity controlled by the user's input.
+
+Usage:
+```
+prompt-improver [-v <verbosity>] <prompt>
 ```
 
-## Usage
+### `shell-explain.sh`
 
-### `prompt-improver`
-The `prompt-improver` script is used to enhance the user's shell prompt with additional context and verbosity based on the user's request. The script takes the following options:
+The `shell-explain.sh` script provides explanations for shell commands, with the level of detail controlled by the user's input. It uses an LLM to generate a concise explanation of the command's purpose and functionality.
 
-- `-v <verbosity>`: Sets the response verbosity level, where 0 is the default and higher numbers increase the verbosity.
-
-Example usage:
-```bash
-prompt-improver -v 3 "What is the current directory?"
+Usage:
+```
+shell-explain [<verbosity>] <command>
 ```
 
-### `shell-explain`
-The `shell-explain` script is used to provide explanations for shell commands. It takes the following options:
+### `shell-commander.sh`
 
-- `<verbosity>`: Sets the response verbosity level, where 1 is the default and higher numbers increase the verbosity.
-- `<command>`: The shell command to be explained.
+The `shell-commander.sh` script allows users to input a command, and the script will use an LLM to provide the reasoning behind the command and generate the command itself. This can be useful for users who are unfamiliar with certain shell commands.
 
-Example usage:
-```bash
-shell-explain 3 ls -l
+Usage:
+```
+shell-commander <command>
 ```
 
-### `shell-commander`
-The `shell-commander` script is used to generate and execute shell commands based on a user's request. It takes the following arguments:
+Alias: `shelp`
 
-- `<command>`: The user's request for a shell command.
+### `shell-scripter.sh`
 
-Example usage:
-```bash
-shelp "list all files in the current directory"
+The `shell-scripter.sh` script generates a shell script based on a user's prompt. It uses an LLM to provide reasoning for the script, an explanation of its functionality, and the script itself.
+
+Usage:
+```
+shell-scripter <prompt>
 ```
 
-### `shell-scripter`
-The `shell-scripter` script is used to generate complete bash shell scripts based on a user's prompt. It takes the following arguments:
+### `mindstorm-generator.sh`
 
-- `<prompt>`: The user's request for a shell script.
+The `mindstorm-generator.sh` script generates a "mindstorm" of ideas based on a user's prompt. It utilizes an LLM to produce a list of creative and innovative ideas related to the user's input.
 
-Example usage:
-```bash
-shell-scripter "Write a script to backup the /etc directory to a tar file"
+Usage:
+```
+mindstorm-generator [-m|--model <model>] <prompt>
 ```
 
-### `mindstorm-generator`
-The `mindstorm-generator` script is used to generate a mindstorm of ideas based on a user's prompt. It takes the following options:
+## Python Scripts
 
-- `-m <model>`: Specifies the LLM model to use for the mindstorm generation (default is `claude-3.5-sonnet`).
-- `<prompt>`: The user's request for a mindstorm of ideas.
+### `py-explain.sh`
 
-Example usage:
-```bash
-mindstorm-generator -m gpt-4 "Generate ideas for a new startup business"
+The `py-explain.sh` script provides explanations for Python code, with the level of detail controlled by the user's input. It uses an LLM to generate a concise explanation of the code's purpose and functionality.
+
+Usage:
 ```
-
-### `py-explain`
-The `py-explain` script is used to provide explanations for Python code. It takes the following options:
-
-- `<verbosity>`: Sets the response verbosity level, where 1 is the default and higher numbers increase the verbosity.
-- `<python_code>`: The Python code to be explained.
-
-Example usage:
-```bash
-py-explain 3 "def factorial(n):\n    if n == 0:\n        return 1\n    else:\n        return n * factorial(n-1)"
+py-explain [<verbosity>] <python_code>
 ```
 
 ## Contributing
-If you would like to contribute to the Shell Scripting Toolkit, please follow these steps:
+
+If you would like to contribute to this project, please follow these guidelines:
 
 1. Fork the repository.
 2. Create a new branch for your feature or bug fix.
-3. Implement your changes and ensure that the existing scripts are not broken.
-4. Test your changes thoroughly.
+3. Make your changes and commit them with clear commit messages.
+4. Push your changes to your fork.
 5. Submit a pull request with a detailed description of your changes.
 
-We welcome contributions of all kinds, including new scripts, bug fixes, and improvements to the existing scripts.
+We welcome contributions from the community and appreciate your help in improving this project.
