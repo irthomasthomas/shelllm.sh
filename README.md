@@ -1,124 +1,172 @@
-# Shell Scripts
+# Shell Scripts for Productivity and Automation
 
 ## Project Description
-
-This repository contains a collection of shell scripts that provide various functionalities, including command execution, task planning, script generation, prompt improvement, and more. These scripts utilize natural language processing (NLP) capabilities to assist users in automating tasks and enhancing their command-line interface (CLI) experience.
+This repository contains a collection of shell scripts designed to enhance productivity, streamline workflows, and automate various tasks. The scripts leverage large language models (LLMs) to provide intelligent assistance, generate code, and simplify complex operations.
 
 ## Installation
+To use the scripts in this repository, you will need to have the following installed on your system:
 
-To use the scripts in this repository, you will need to have the following dependencies installed:
+1. **Bash** or compatible shell environment
+2. **llm** command-line tool for interacting with LLMs (e.g., GPT-3, GPT-J, GPT-Neo)
 
-- A compatible shell (e.g., Bash, Zsh)
-- The `llm` command-line tool for interacting with the NLP model
+You can install the `llm` tool using the following command:
 
-Once you have the dependencies installed, you can clone the repository and source the desired scripts in your shell configuration file (e.g., `.bashrc`, `.zshrc`).
+```bash
+pip install llm
+```
 
 ## Usage
 
-### `shell-commander`
-The `shell-commander` script allows you to execute shell commands with the help of an NLP model. It takes a user input, generates a command based on the input, and executes the command. The script supports verbosity levels to provide additional information about the reasoning behind the generated command.
+The repository includes the following shell scripts:
+
+### Shell Commander
+The `shell-commander` script allows you to generate shell commands based on a natural language prompt. It uses an LLM to understand the user's intent and provide the appropriate command.
 
 Usage:
-```
-shelp [-v <verbosity>] <user_input>
-```
-
-### `task_planner`
-The `task_planner` script generates a task plan based on user input. It supports various options, such as specifying a verbosity level, adding notes, and controlling the display of the reasoning behind the task plan.
-
-Usage:
-```
-task_plan [--v=<verbosity>] [--n=<note>] [--reasoning] [--show-reasoning] [--raw] <task_description>
+```bash
+shelp [options] <command_prompt>
 ```
 
-### `shell-explain`
-The `shell-explain` script provides an explanation for a given shell command or script. It generates a short explanation of the command's functionality based on the user's input.
+Options:
+- `--v=<level>` or `--verbosity=<level>`: Set the verbosity level (0-9) for the response.
+- `--reasoning`: Display the reasoning behind the generated command.
+- `--show-reasoning`: Show the reasoning along with the command.
+- `--raw` or `--r`: Return the raw command without any additional formatting.
+
+### Task Planner
+The `task_planner` script generates a step-by-step plan for a given task. It uses an LLM to understand the task and provide a detailed plan.
 
 Usage:
-```
-explainer [-v <verbosity>] <command>
-```
-
-### `shell-scripter`
-The `shell-scripter` script generates a shell script based on user input. It provides the generated script, as well as an explanation of the script's functionality.
-
-Usage:
-```
-scripter [-v <verbosity>] <user_input>
+```bash
+task_plan [options] <task_description>
 ```
 
-### `prompt-improver`
-The `prompt-improver` script takes user input and generates an improved prompt based on the input. This can be useful for enhancing the quality of prompts used in various contexts, such as chatbots or task automation.
+Options:
+- `--v=<level>` or `--verbosity=<level>`: Set the verbosity level (0-9) for the response.
+- `--n=<note>` or `--note=<note>`: Provide additional notes to guide the task planning.
+- `--reasoning`: Display the reasoning behind the generated plan.
+- `--show-reasoning`: Show the reasoning along with the plan.
+- `--raw` or `--r`: Return the raw plan without any additional formatting.
 
-Usage:
-```
-prompt-improver [-v <verbosity>] <prompt>
-```
-
-### `mindstorm-ideas-generator`
-The `mindstorm-ideas-generator` script generates creative ideas for a given topic or problem. It can be used to stimulate brainstorming and ideation.
+### Shell Explainer
+The `shell-explain` script provides a natural language explanation for a given shell command or script.
 
 Usage:
-```
-mindstorm <topic>
-```
-
-### `py-explain`
-The `py-explain` script provides an explanation of Python code with a specified verbosity level.
-
-Usage:
-```
-py-explain [<verbosity>] <python_code>
+```bash
+explainer [-v <verbosity>] <shell_command> [arguments]
 ```
 
-### `digraph_generator`
-The `digraph_generator` script generates a digraph (directed graph) based on user input, with support for adjusting the verbosity level.
+Options:
+- `-v <verbosity>`: Set the verbosity level (0-9) for the response.
+
+### Shell Scripter
+The `shell-scripter` script generates a shell script based on a natural language prompt. It uses an LLM to understand the user's intent and generate the appropriate script.
 
 Usage:
-```
-digraph [-v <verbosity>] <input>
-```
-
-### `search_term_engineer`
-The `search_term_engineer` script generates high-quality search queries based on user input, with support for specifying the number of queries to generate.
-
-Usage:
-```
-search_term_engineer [-v <verbosity>] <user_input> [<num_queries>]
+```bash
+scripter [options] <script_prompt>
 ```
 
-### `write_agent_plan`
-The `write_agent_plan` script generates an agent plan based on a task description, with support for specifying the number of steps in the plan.
+Options:
+- `-v <verbosity>`: Set the verbosity level (0-9) for the response.
+
+### Prompt Improver
+The `prompt-improver` script refines a given prompt to generate a more effective response from an LLM.
 
 Usage:
-```
-agent_plan [-v <verbosity>] <task_description> [<num_steps>]
-```
-
-### `analytical_hierarchy_process_agent`
-The `analytical_hierarchy_process_agent` script generates an Analytical Hierarchy Process (AHP) analysis based on user-provided ideas, criteria, and weights.
-
-Usage:
-```
-ahp [--v=<verbosity>] [--n=<note>] [--raw] ideas criterion weights
+```bash
+prompt-improver [options] <prompt>
 ```
 
-### `commit_msg_generator`
-The `commit_msg_generator` script generates a commit message based on the changes in the local git repository. It stages all changes, generates a commit message, and then pushes the changes to the remote repository.
+Options:
+- `-v <verbosity>`: Set the verbosity level (0-9) for the response.
+
+### Mindstorm Ideas Generator
+The `mindstorm-ideas-generator` script generates a list of creative ideas based on a given prompt.
 
 Usage:
-```
-commit_msg [-v=<verbosity>] [-n=<note>]
+```bash
+mindstorm <prompt>
 ```
 
-### `cli_ergonomics_agent`
-The `cli_ergonomics_agent` script analyzes a command-line interface (CLI) and provides recommendations for improving its ergonomics and usability.
+### Python Explainer
+The `py-explain` script provides a natural language explanation for a given Python script or code snippet.
 
 Usage:
+```bash
+py-explain [verbosity] <python_code>
 ```
-cli_ergonomics_agent [--v=<verbosity>] [--n=<note>] [--raw] <cli_interface>
+
+### Digraph Generator
+The `digraph-generator` script generates a directed graph (digraph) based on user input.
+
+Usage:
+```bash
+digraph [options] <input>
 ```
+
+Options:
+- `-v <verbosity>`: Set the verbosity level (0-9) for the response.
+
+### Search Term Engineer
+The `search_term_engineer` script generates high-quality search queries based on user input.
+
+Usage:
+```bash
+search_term_engineer [options] <user_input> [num_queries]
+```
+
+Options:
+- `-v <verbosity>`: Set the verbosity level (0-9) for the response.
+
+### Agent Plan Writer
+The `write_agent_plan` script writes an agent plan based on a task description.
+
+Usage:
+```bash
+agent_plan [options] <task_description> [num_steps]
+```
+
+Options:
+- `-v <verbosity>`: Set the verbosity level (0-9) for the response.
+
+### Analytical Hierarchy Process Agent
+The `analytical_hierarchy_process_agent` script generates a multi-criteria decision analysis using the Analytical Hierarchy Process (AHP) method.
+
+Usage:
+```bash
+ahp [options] ideas criterion weights
+```
+
+Options:
+- `--v=<level>` or `--verbosity=<level>`: Set the verbosity level (0-9) for the response.
+- `--n=<note>` or `--note=<note>`: Provide additional notes to guide the AHP process.
+- `--raw` or `--r`: Return the raw AHP result without additional formatting.
+
+### Commit Message Generator
+The `commit_msg_generator` script generates a commit message based on the staged changes in the repository.
+
+Usage:
+```bash
+commit [options]
+```
+
+Options:
+- `-v=<level>` or `-verbosity=<level>`: Set the verbosity level (0-9) for the response.
+- `-n=<note>` or `-note=<note>`: Provide additional notes to guide the commit message generation.
+
+### CLI Ergonomics Agent
+The `cli_ergonomics_agent` script analyzes a command-line interface and provides suggestions for improving its ergonomics and usability.
+
+Usage:
+```bash
+cli_ergonomics_agent [options] <cli_interface>
+```
+
+Options:
+- `--v=<level>` or `--verbosity=<level>`: Set the verbosity level (0-9) for the response.
+- `--n=<note>` or `--note=<note>`: Provide additional notes to guide the CLI analysis.
+- `--raw` or `--r`: Return the raw response without parsing.
 
 ## Contributing
-
-Contributions to this repository are welcome. If you have any improvements or additional functionality to add, please feel free to submit a pull request. When contributing, please follow the existing coding style and provide clear documentation for any new features or scripts.
+If you find any issues or have suggestions for improvements, feel free to submit a pull request or open an issue in the repository. Contributions are welcome, and we appreciate your feedback to make these scripts more useful and effective.
