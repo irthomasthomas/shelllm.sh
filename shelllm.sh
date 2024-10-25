@@ -267,7 +267,6 @@ commit() {
   local verbosity note msg commit_msg DIFF
   local system_prompt="$(which commit)"
   local args=()
-
   # Process arguments, stripping out -v and -n flags
   for arg in "$@"; do
     case $arg in
@@ -279,20 +278,14 @@ commit() {
 
   # Stage all changes
   git add .
-
-  # Main loop for generating and confirming commit message
+  
   while true; do
-    echo "Using model: $model"
-
     # Determine appropriate diff command based on size
     if [[ $(git diff --cached | wc -w) -lt 160000 ]]; then
-      echo "git diff is small, we can use the whole diff"
       DIFF="$(git diff --cached)"
     elif [[ "$(git shortlog --no-merges | wc -w)" -lt 160000 ]]; then 
-      echo "using git shortlog"
       DIFF="$(git shortlog --no-merges)"
     else
-      echo "Using git diff --stat as diff is too large"
       DIFF="$(git diff --cached --stat)"
     fi
 
@@ -315,24 +308,29 @@ commit() {
 }
 
 cli_ergonomics_agent () {
-  # todo: add -raw flag to return raw response without parsing
-  # todo: Append a message to request a response with a specific verbosity level
+  # Add -raw flag to return raw response without parsing
   local system_prompt="$(which cli_ergonomics_agent)"
   local verbosity=0
+  local raw=false
   local args=()
 
-  # Process arguments, stripping out -v and -n flags
+  # Process arguments, stripping out -v, -n, and -raw flags
   for arg in "$@"; do
     case $arg in
-      -v=*|-verbosity=*) system_prompt+="<verbosity> User requests a generated response with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
-      -n=*|-note=*) system_prompt+="<note> User added the following note to guide your response generation: ${arg#*=} </note>" ;;
+      --v=*|--verbosity=*) system_prompt+="<verbosity> User requests a generated response with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
+      --n=*|--note=*) system_prompt+="<note> User added the following note to guide your response generation: ${arg#*=} </note>" ;;
+      --raw|--r) raw=true ;;
       *) args+=("$arg") ;;
     esac
   done
   
   response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
+  
+  if [ "$raw" = true ]; then
+    echo "$response"
+  else
   thinking="$(echo "$response" | awk 'BEGIN{RS="<THINKING>"} NR==2' | awk 'BEGIN{RS="</THINKING>"} NR==1')"
   refactored_cli="$(echo "$response" | awk 'BEGIN{RS="<refactored_cli>"} NR==2' | awk 'BEGIN{RS="</refactored_cli>"} NR==1')"
-  
   echo "$refactored_cli" | pv -qL 300
+  fi
 }
