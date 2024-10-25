@@ -1,79 +1,64 @@
-# Prompt Engineering Utilities
+# AI-Powered Shell Toolkit
 
 ## Project Description
-This repository contains a collection of shell scripts and Python utilities designed to enhance the user experience and productivity in working with large language models (LLMs) for various tasks. These scripts provide functionality for improving command line prompts, explaining shell commands, generating shell scripts, and stimulating idea generation through mindstorming.
+The AI-Powered Shell Toolkit is a collection of shell scripts that leverage large language models (LLMs) to enhance the user's shell experience. These scripts provide various functionalities, including improving command prompts, explaining shell commands, generating shell scripts, and more.
 
 ## Installation
-To use the utilities in this repository, you'll need to have the following software installed on your system:
+To use the AI-Powered Shell Toolkit, you will need to have the following dependencies installed:
+- A recent version of Bash or a compatible shell
+- The `llm` command-line tool (https://github.com/anthropic-research/llm)
 
-- Python (version 3.6 or later)
-- A large language model (LLM) like GPT-3 or similar, accessible through a command-line interface
-
-Once you have these dependencies, you can clone the repository and add the scripts to your system's PATH or use them directly from the cloned directory.
+Once you have the dependencies installed, you can download the shell scripts from the repository and add them to your system's `PATH` environment variable.
 
 ## Usage
 
-### Shell Scripts
-
-#### `prompt-improver`
-The `prompt-improver` script helps to improve a user's command line prompt by incorporating additional information and verbosity based on the user's request. It takes a user prompt as input and generates an enhanced prompt with the requested level of verbosity.
+### `prompt-improver`
+The `prompt-improver` script takes a user prompt and enhances it with additional information based on the requested verbosity level. This can be useful for providing more context or instructions to the user.
 
 Usage:
 ```
-prompt-improver [-v <verbosity>] <user_prompt>
+prompt-improver [-v <verbosity>] "<user_prompt>"
 ```
 
-#### `shell-explain`
-The `shell-explain` script provides explanations for shell commands, with the level of detail controlled by the user's requested verbosity. It takes a shell command as input and generates a short explanation of the command's functionality.
+### `shell-explain`
+The `shell-explain` script provides an explanation of a shell command, with the level of detail controlled by the verbosity parameter.
 
 Usage:
 ```
-shell-explain [<verbosity>] <shell_command>
+shell-explain [<verbosity>] "<shell_command>"
 ```
 
-#### `shell-commander`
-The `shell-commander` script generates shell commands based on a user's request, along with an explanation of the reasoning behind the generated command. It takes a user prompt as input and outputs the corresponding shell command.
+### `shell-commander`
+The `shell-commander` script takes a shell command and generates the corresponding reasoning and command for the user.
 
 Usage:
 ```
-shell-commander <user_prompt>
+shelp "<shell_command>"
 ```
 
-Alias: `shelp`
-
-#### `shell-scripter`
-The `shell-scripter` script generates shell scripts based on a user's request, along with an explanation of the script's purpose and functionality. It takes a user prompt as input and outputs the generated shell script.
+### `shell-scripter`
+The `shell-scripter` script generates a shell script based on a user prompt, along with an explanation of the script's purpose.
 
 Usage:
 ```
-shell-scripter <user_prompt>
+shell-scripter "<user_prompt>"
 ```
 
-#### `mindstorm-generator`
-The `mindstorm-generator` script generates a mindstorm of ideas based on a user's prompt. It takes a user prompt as input and generates a list of related ideas using a specified LLM model.
+### `mindstorm-generator`
+The `mindstorm-generator` script generates a "mindstorm" of ideas based on a user prompt, using a specified language model.
 
 Usage:
 ```
-mindstorm-generator [-m <model>] <user_prompt>
+mindstorm-generator [-m <model>] "<user_prompt>"
 ```
 
-### Python Scripts
-
-#### `py-explain`
-The `py-explain` script provides explanations for Python code, with the level of detail controlled by the user's requested verbosity. It takes Python code as input and generates a detailed explanation of the code's functionality.
+### `py-explain`
+The `py-explain` script provides an explanation of a Python code snippet, with the level of detail controlled by the verbosity parameter.
 
 Usage:
 ```
-py-explain [<verbosity>] <python_code>
+py-explain [<verbosity>] "<python_code>"
 ```
 
 ## Contributing
-If you would like to contribute to this project, please follow these steps:
-
-1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
-3. Implement your changes and write any necessary documentation.
-4. Test your changes to ensure they work as expected.
-5. Submit a pull request with a detailed description of your changes.
-
-We welcome contributions from the community to help improve and expand the functionality of these utilities.
+Contributions to the AI-Powered Shell Toolkit are welcome! If you have any ideas for new features, bug fixes, or improvements, please feel free to submit a pull request. Make sure to follow the project's coding conventions and provide clear documentation for any changes.
