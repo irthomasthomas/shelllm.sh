@@ -71,11 +71,10 @@ shell-scripter () {
     echo "Explanation: $explanation" | pv -qL 250
   fi
 }
-
 alias scripter=shell-scripter
 
+
 prompt-improver () {
-  about="Improve a user prompt with verbosity depending on the user's request"
   local system_prompt="$(which prompt-improver)"
   local response_verbosity=0 opt
   while getopts "v:" opt; do
@@ -91,27 +90,13 @@ prompt-improver () {
     </IMPORTANT>
     "
   fi
-  local response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream | tee /dev/tty)
+  local response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream)
   local improved_prompt=$(echo "$response" | awk 'BEGIN{RS="<improved_prompt>"} NR==2' | awk 'BEGIN{RS="</improved_prompt>"} NR==1')
   echo "$improved_prompt"
 }
 
 mindstorm-ideas-generator () {
   local system_prompt="$(which mindstorm-ideas-generator)"
-  local response_verbosity=0 opt
-  while getopts "v:" opt; do
-    case $opt in
-      v) response_verbosity=$OPTARG ;;
-    esac
-  done
-  shift $((OPTIND-1))
-  if [[ "$response_verbosity" -gt 0 ]]; then
-    system_prompt+="
-    <IMPORTANT>
-    The user requested a response verbosity: $response_verbosity of 9
-    </IMPORTANT>
-    "
-  fi
   response=$(llm -m "$model" -s "$system_prompt" "$1" "${@:2}" --no-stream)
   mindstorm=$(echo "$response" | awk 'BEGIN{RS="<mindstorm>"} NR==2' | awk 'BEGIN{RS="</mindstorm>"} NR==1')
   echo "$mindstorm"
@@ -278,63 +263,76 @@ analytical_hierarchy_process_generator () {
 }
 alias ahp=analytical_hierarchy_process_generator
 
-
-
 commit() {
-  local note msg commit_msg DIFF
+  local verbosity note msg commit_msg DIFF
   local system_prompt="$(which commit)"
-  local verbosity=0 opt
-  for arg in "$@"; do
-      case $arg in
-          -v=*) verbosity="${arg#*=}" ;;
-          -n=*) note="${arg#*=}" ;;
-      esac
-  done
-  
-  if [[ "$verbosity" -gt 0 ]]; then
-    system_prompt+="
-    <IMPORTANT>
-    The user requested a response verbosity: $verbosity of 9
-    </IMPORTANT>
-    "
-  fi
+  local args=()
 
+  # Process arguments, stripping out -v and -n flags
+  for arg in "$@"; do
+    case $arg in
+      -v=*|-verbosity=*) system_prompt+="<verbosity> User requests a generated response with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
+      -n=*|-note=*) system_prompt+="<note> User added the following note to guide your response generation: ${arg#*=} </note>" ;;
+      *) args+=("$arg") ;;
+    esac
+  done
+
+  # Stage all changes
   git add .
 
+  # Main loop for generating and confirming commit message
   while true; do
-  
-  echo "Using model: $model"
-  if [[ $(git diff --cached | wc -w) -lt 160000 ]]; then
-    echo "git diff is small, we can use the whole diff"
-    DIFF="$(git diff --cached)"
-  elif [[ "$(git shortlog --no-merges | wc -w)" -lt 160000 ]]; then 
-    echo "using git shortlog"
-    DIFF="$(git shortlog --no-merges)"
-  else
-    echo "Using git diff --stat as diff is too large"
-    DIFF="$(git diff --cached --stat)"
-  fi
-  
-  if ! [[ -z "$note" ]]; then
-    system_prompt+="
-    <note>
-    Consider this note from the developer while generating the commit message: $note
-    <note>
-    "
-  fi
-  
-  response="$(echo "$DIFF" | llm -s $system_prompt ${@})"
-  commit_msg="$(echo "$response" | awk 'BEGIN{RS="<commit_msg>"} NR==2' | awk 'BEGIN{RS="</commit_msg>"} NR==1')"
-  echo "$commit_msg"
-  echo "CONFIRM: [y] push to repo [n] regenerate commit message"
-  read confirm
-  if [[ "$confirm" == "y" ]]; then
+    echo "Using model: $model"
+
+    # Determine appropriate diff command based on size
+    if [[ $(git diff --cached | wc -w) -lt 160000 ]]; then
+      echo "git diff is small, we can use the whole diff"
+      DIFF="$(git diff --cached)"
+    elif [[ "$(git shortlog --no-merges | wc -w)" -lt 160000 ]]; then 
+      echo "using git shortlog"
+      DIFF="$(git shortlog --no-merges)"
+    else
+      echo "Using git diff --stat as diff is too large"
+      DIFF="$(git diff --cached --stat)"
+    fi
+
+    # Generate commit message using AI model
+    response="$(echo "$DIFF" | llm -s "$system_prompt" "${args[@]}")"
+    commit_msg="$(echo "$response" | awk 'BEGIN{RS="<commit_msg>"} NR==2' | awk 'BEGIN{RS="</commit_msg>"} NR==1')"
+    
+    # Display commit message and ask for confirmation
+    echo "$commit_msg"
+    echo "CONFIRM: [y] push to repo [n] regenerate commit message"
+    read -r confirm
+    if [[ "$confirm" == "y" ]]; then
       break
-  else
-      continue
-  fi
+    fi
   done
 
-  git commit -m ""$commit_msg""
+  # Commit changes and push to remote repository
+  git commit -m "$commit_msg"
   git push
+}
+
+cli_ergonomics_agent () {
+  # todo: add -raw flag to return raw response without parsing
+  # todo: Append a message to request a response with a specific verbosity level
+  local system_prompt="$(which cli_ergonomics_agent)"
+  local verbosity=0
+  local args=()
+
+  # Process arguments, stripping out -v and -n flags
+  for arg in "$@"; do
+    case $arg in
+      -v=*|-verbosity=*) system_prompt+="<verbosity> User requests a generated response with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
+      -n=*|-note=*) system_prompt+="<note> User added the following note to guide your response generation: ${arg#*=} </note>" ;;
+      *) args+=("$arg") ;;
+    esac
+  done
+  
+  response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
+  thinking="$(echo "$response" | awk 'BEGIN{RS="<THINKING>"} NR==2' | awk 'BEGIN{RS="</THINKING>"} NR==1')"
+  refactored_cli="$(echo "$response" | awk 'BEGIN{RS="<refactored_cli>"} NR==2' | awk 'BEGIN{RS="</refactored_cli>"} NR==1')"
+  
+  echo "$refactored_cli" | pv -qL 300
 }
