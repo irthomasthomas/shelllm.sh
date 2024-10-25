@@ -18,7 +18,7 @@ shell-commander () {
   reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
   shell_command="$(echo "$response" | awk 'BEGIN{RS="<shell_command>"} NR==2' | awk 'BEGIN{RS="</shell_command>"} NR==1' | sed '/^ *#/d;/^$/d')" 
   if [[ "$verbosity" -gt 0 ]]; then
-    echo "Reasoning: $reasoning" | pv -qL 250
+    echo "Reasoning: $reasoning"
   fi
   print -z "$shell_command"
 }
@@ -28,13 +28,15 @@ task_planner () {
   local verbosity=0
   local raw=false
   local reasoning=false
+  local show_reasoning=false
   local args=()
 
   for arg in "$@"; do
     case $arg in
       --v=*|--verbosity=*) system_prompt+="<verbosity> The user requests a <task_plan> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
       --n=*|--note=*) system_prompt+="<note> The user requests that you pay particular attention to the following information: ${arg#*=} </note>" ;;
-      --reasoning) reasoning=true && system_prompt+="<REASONING> The user requests that you provide <REASONING> BEFORE the <task_plan> </REASONING>" ;;
+      --reasoning) reasoning=true && system_prompt+="<reasoning> The user requests that you provide <reasoning> BEFORE the <task_plan> </reasoning>" ;;
+      --show-reasoning) show_reasoning=true ;;
       --raw|--r) raw=true ;;
       *) args+=("$arg") ;;
     esac
@@ -46,11 +48,13 @@ task_planner () {
     echo "$task_planner_response"
   else
     if [ "$reasoning" = true ]; then
-      REASONING="$(echo "$task_planner_response" | awk 'BEGIN{RS="<REASONING>"} NR==2' | awk 'BEGIN{RS="</REASONING>"} NR==1')"
-      echo "$REASONING"
+      reasoning="$(echo "$task_planner_response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
+      if [ "$show_reasoning" = true ]; then
+        echo "$reasoning"
+      fi
     fi
-    TASK_PLAN="$(echo "$task_planner_response" | awk 'BEGIN{RS="<TASK_PLAN>"} NR==2' | awk 'BEGIN{RS="</TASK_PLAN>"} NR==1')"
-    echo "$TASK_PLAN"
+    task_plan="$(echo "$task_planner_response" | awk 'BEGIN{RS="<task_plan>"} NR==2' | awk 'BEGIN{RS="</task_plan>"} NR==1')"
+    echo "$task_plan"
   fi
 }
 
@@ -101,7 +105,7 @@ shell-scripter () {
   explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
   echo "$shell_script"
   if [[ "$verbosity" -gt 0 ]]; then
-    echo "Explanation: $explanation" | pv -qL 250
+    echo "Explanation: $explanation" # | pv -qL 250
   fi
 }
 alias scripter=shell-scripter
@@ -151,7 +155,7 @@ py-explain () {
   response_verbosity_requested: $verbosity of 9"
   response=$(llm -m claude-3.5-sonnet -s "$system_prompt" "$1" "${@:2}" | tee /dev/tty)
   explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
-  echo "$explanation" | pv -qL 250
+  echo "$explanation"
 }
 
 digraph_generator () {
@@ -343,6 +347,6 @@ cli_ergonomics_agent () {
   else
   thinking="$(echo "$response" | awk 'BEGIN{RS="<THINKING>"} NR==2' | awk 'BEGIN{RS="</THINKING>"} NR==1')"
   refactored_cli="$(echo "$response" | awk 'BEGIN{RS="<refactored_cli>"} NR==2' | awk 'BEGIN{RS="</refactored_cli>"} NR==1')"
-  echo "$refactored_cli" | pv -qL 300
+  echo "$refactored_cli"
   fi
 }
