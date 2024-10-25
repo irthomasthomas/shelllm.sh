@@ -1,62 +1,113 @@
-# Shell Script Repository
+# Shell Scripts Repository
 
 ## Project Description
-
-This repository contains a collection of shell scripts that provide various utilities and functionalities. The scripts are designed to enhance productivity, automate repetitive tasks, and provide intelligent solutions to common challenges. These scripts leverage large language models (LLMs) to generate responses, provide explanations, and assist users in various ways.
+This repository contains a collection of shell scripts that provide various functionalities to automate tasks and enhance productivity. The scripts cover a wide range of use cases, including command execution, code explanation, script generation, task planning, and more. These scripts leverage the power of large language models (LLMs) to generate responses based on user input and requests.
 
 ## Installation
-
 To use the scripts in this repository, you will need to have the following dependencies installed:
 
-- Bash
-- `llm` command-line tool (or an equivalent LLM-based tool)
+1. `llm` (Large Language Model) command-line tool
+2. `pv` (Pipe Viewer) for displaying output with a smooth animation
 
-You can clone the repository and add the scripts to your system's `PATH` variable or create symbolic links to them.
+You can install these dependencies using your system's package manager (e.g., `apt`, `brew`, `yum`, etc.).
 
 ## Usage
 
-The repository contains the following shell scripts:
+### Shell Commander (`shelp`)
+The `shelp` command allows you to execute shell commands and receive a response with reasoning and the actual command to be executed. The `shelp` command supports optional verbosity settings.
 
-### Shell-related Scripts
+**Usage:**
+```
+shelp [-v <verbosity>] <command>
+```
 
-1. **`shell-commander`**: This script allows you to execute shell commands with the help of an LLM. It provides a response with the reasoning behind the recommended command and the actual command to be executed.
-2. **`shell-explain`**: This script explains the purpose and functionality of a given shell command or script.
-3. **`shell-scripter`**: This script generates shell scripts based on user input, providing both the script and an explanation of its functionality.
+### Shell Explainer (`explainer`)
+The `explainer` command provides a short explanation for a given shell command. The explanation is generated using an LLM and can be displayed with optional verbosity settings.
 
-### Prompt Improvement and Generation
+**Usage:**
+```
+explainer [-v <verbosity>] <command>
+```
 
-1. **`prompt-improver`**: This script enhances user prompts by adding relevant information and improving the overall quality based on the user's requested verbosity level.
-2. **`mindstorm-ideas-generator`**: This script generates creative ideas and brainstorming suggestions based on user input and the requested verbosity level.
+### Shell Scripter (`scripter`)
+The `scripter` command generates a shell script based on a user's request. It provides the generated script, along with an explanation of the script's purpose and reasoning.
 
-### Code Explanation and Visualization
+**Usage:**
+```
+scripter [-v <verbosity>] <task_description>
+```
 
-1. **`py-explain`**: This script explains the functionality of a given Python code snippet with the desired level of verbosity.
-2. **`digraph_generator`**: This script generates a digraph (directed graph) visualization based on user input and the requested verbosity level.
+### Prompt Improver (`prompt-improver`)
+The `prompt-improver` command takes a user prompt and generates an improved version of the prompt with additional context and details, based on the user's requested verbosity level.
 
-### Search and Planning
+**Usage:**
+```
+prompt-improver [-v <verbosity>] <prompt>
+```
 
-1. **`search_term_engineer`**: This script generates high-quality search queries for search engines based on user input and the requested verbosity level.
-2. **`write_agent_plan`**: This script writes an agent plan (a step-by-step plan of action) based on a task description and the requested verbosity level.
-3. **`write_task_plan`**: This script writes a detailed task plan (a step-by-step plan for completing a task) based on a task description and the requested verbosity level.
+### Mindstorm Ideas Generator (`mindstorm`)
+The `mindstorm` command generates creative ideas for a given topic or task, leveraging the capabilities of LLMs.
 
-### Analytical Hierarchy Process
+**Usage:**
+```
+mindstorm [-v <verbosity>] <topic>
+```
 
-1. **`analytical_hierarchy_process_generator`**: This script generates an Analytical Hierarchy Process (AHP) analysis based on user-provided ideas, criteria, and weights.
+### Python Explainer (`py-explain`)
+The `py-explain` command provides an explanation for a given Python code snippet, with optional verbosity settings.
 
-### Commit Message Generator
+**Usage:**
+```
+py-explain [<verbosity>] <python_code>
+```
 
-1. **`commit`**: This script generates a commit message for a Git repository based on the changes made, using an LLM to provide a high-quality, concise, and informative commit message.
+### Digraph Generator (`digraph`)
+The `digraph` command generates a directed graph (digraph) based on user input, with optional verbosity settings.
 
-Each script has its own usage instructions and example usages, which can be found in the script files themselves.
+**Usage:**
+```
+digraph [-v <verbosity>] <input>
+```
+
+### Search Term Engineer (`search_term_engineer`)
+The `search_term_engineer` command generates high-quality search queries based on user input, with optional control over the number of queries to be generated.
+
+**Usage:**
+```
+search_term_engineer [-v <verbosity>] <user_input> [<num_queries>]
+```
+
+### Agent Plan Writer (`agent_plan`)
+The `agent_plan` command writes an agent plan based on a task description, with optional control over the number of steps in the plan.
+
+**Usage:**
+```
+agent_plan [-v <verbosity>] <task_description> [<num_steps>]
+```
+
+### Task Plan Writer (`task_plan`)
+The `task_plan` command writes a detailed task plan based on a task description, with optional control over the number of steps in the plan.
+
+**Usage:**
+```
+task_plan [-v <verbosity>] <task_description> [<num_steps>]
+```
+
+### Analytical Hierarchy Process (AHP) Generator (`ahp`)
+The `ahp` command generates an Analytical Hierarchy Process (AHP) based on user-provided ideas, criteria, and weights.
+
+**Usage:**
+```
+ahp [-v <verbosity>] <industry/product> ideas criterion weights
+```
+
+### Commit Helper (`commit`)
+The `commit` command automates the Git commit process, generating a commit message based on the changes in the repository and user-provided notes.
+
+**Usage:**
+```
+commit [-v <verbosity>] [<note>]
+```
 
 ## Contributing
-
-If you'd like to contribute to this repository, please follow these guidelines:
-
-1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
-3. Implement your changes and ensure they work as expected.
-4. Update the README.md file with any relevant information about your changes.
-5. Submit a pull request, describing the changes you've made and the problem they solve.
-
-We welcome contributions that improve the functionality, usability, or documentation of the scripts in this repository.
+Contributions to this repository are welcome! If you have any improvements, bug fixes, or new scripts to add, please submit a pull request. Make sure to follow the existing coding style and provide clear documentation for any new features or scripts.
