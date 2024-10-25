@@ -23,6 +23,39 @@ shell-commander () {
   print -z "$shell_command"
 }
 
+task_planner () {
+  local system_prompt="$(which task_planner)"
+  local verbosity=0
+  local raw=false
+  local reasoning=false
+  local args=()
+
+  for arg in "$@"; do
+    case $arg in
+      --v=*|--verbosity=*) system_prompt+="<verbosity> The user requests a <task_plan> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
+      --n=*|--note=*) system_prompt+="<note> The user requests that you pay particular attention to the following information: ${arg#*=} </note>" ;;
+      --reasoning) reasoning=true && system_prompt+="<REASONING> The user requests that you provide <REASONING> BEFORE the <task_plan> </REASONING>" ;;
+      --raw|--r) raw=true ;;
+      *) args+=("$arg") ;;
+    esac
+  done
+  
+  task_planner_response=$(llm -s "$system_prompt" "${args[@]}" --no-stream -o temperature 0)
+  
+  if [ "$raw" = true ]; then
+    echo "$task_planner_response"
+  else
+    if [ "$reasoning" = true ]; then
+      REASONING="$(echo "$task_planner_response" | awk 'BEGIN{RS="<REASONING>"} NR==2' | awk 'BEGIN{RS="</REASONING>"} NR==1')"
+      echo "$REASONING"
+    fi
+    TASK_PLAN="$(echo "$task_planner_response" | awk 'BEGIN{RS="<TASK_PLAN>"} NR==2' | awk 'BEGIN{RS="</TASK_PLAN>"} NR==1')"
+    echo "$TASK_PLAN"
+  fi
+}
+
+alias task_plan=task_planning_agent
+
 alias shelp=shell-commander
 
 shell-explain () {
@@ -200,53 +233,26 @@ write_agent_plan () {
 alias agent_plan=write_agent_plan
 
 
-write_task_plan () {
-  local system_prompt="$(which write_task_plan)"
-  local verbosity=0 opt
-  while getopts "v:" opt; do
-    case $opt in
-      v) verbosity=$OPTARG ;;
-    esac
-  done
-  shift $((OPTIND-1))
-  if [[ "$verbosity" -gt 0 ]]; then
-    system_prompt+="
-    <IMPORTANT>
-    The user requested a response verbosity: $verbosity of 9
-    </IMPORTANT>
-    "
-  fi
-  local task_description="$1"
-  local num_steps=${2:-5}
-  
-  response=$(llm -s "$system_prompt" "Write a detailed task plan with $num_steps steps for the following task: $task_description" --no-stream)
-  
-  task_plan="$(echo "$response" | awk 'BEGIN{RS="<task_plan>"} NR==2' | awk 'BEGIN{RS="</task_plan>"} NR==1')"
-  echo "$task_plan"
-}
-alias task_plan=write_task_plan
-
-
-analytical_hierarchy_process_generator () {
-  local system_prompt="$(which analytical_hierarchy_process_generator)"
-  local verbosity=0 opt
-  while getopts "v:" opt; do
-    case $opt in
-      v) verbosity=$OPTARG ;;
-    esac
-  done
-  shift $((OPTIND-1))
-  if [[ "$verbosity" -gt 0 ]]; then
-    system_prompt+="
-    <IMPORTANT>
-    The user requested a response verbosity: $verbosity of 9
-    </IMPORTANT>
-    "
-  fi
+analytical_hierarchy_process_agent () {
+  local system_prompt="$(which analytical_hierarchy_process_agent)"
   local ideas_list=()
   local criterion_list=()
   local weights_list=()
-  for arg in "${@:2}"; do
+  local verbosity=0
+  local raw=false
+  local args=()
+
+  # Process arguments, stripping out -v, -n, and -raw flags
+  for arg in "$@"; do
+    case $arg in
+      --v=*|--verbosity=*) system_prompt+="<verbosity> User requests a generated response with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
+      --n=*|--note=*) system_prompt+="<note> User added the following note to guide your response generation: ${arg#*=} </note>" ;;
+      --raw|--r) raw=true ;;
+      *) args+=("$arg") ;;
+    esac
+  done
+  
+  for arg in "$@"; do
     if [[ "$arg" == "ideas" ]]; then
       ideas_list+=("$arg")
     elif [[ "$arg" == "criterion" ]]; then
@@ -256,16 +262,21 @@ analytical_hierarchy_process_generator () {
     fi
   done
   # Provide a list of [number] ideas for [industry/product] that demonstrate the highest weighted scores.
-  response=$(llm -s "$system_prompt" "$1" "${@:2}" | tee /dev/tty)
+  response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
   
-  AHP="$(echo "$response" | awk 'BEGIN{RS="<AHP>"} NR==2' | awk 'BEGIN{RS="</AHP>"} NR==1')"
-  echo "$AHP"
+  if [ "$raw" = true ]; then
+    echo "$response"
+  else  
+    AHP="$(echo "$response" | awk 'BEGIN{RS="<AHP>"} NR==2' | awk 'BEGIN{RS="</AHP>"} NR==1')"
+    echo "$AHP"
+  fi
 }
+
 alias ahp=analytical_hierarchy_process_generator
 
-commit() {
+commit_msg_generator() {
   local verbosity note msg commit_msg DIFF
-  local system_prompt="$(which commit)"
+  local system_prompt="$(which commit_msg_generator)"
   local args=()
   # Process arguments, stripping out -v and -n flags
   for arg in "$@"; do
@@ -306,6 +317,7 @@ commit() {
   git commit -m "$commit_msg"
   git push
 }
+alias commit_msg=commit_msg_generator
 
 cli_ergonomics_agent () {
   # Add -raw flag to return raw response without parsing
