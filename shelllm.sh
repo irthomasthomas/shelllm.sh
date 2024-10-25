@@ -1,26 +1,34 @@
 shell-commander () {
   local system_prompt="$(which shell-commander)"
-  local verbosity=0 opt
-  while getopts "v:" opt; do
-    case $opt in
-      v) verbosity=$OPTARG ;;
+  local verbosity=0
+  local raw=false
+  local reasoning=false
+  local show_reasoning=false
+  local args=()
+
+  for arg in "$@"; do
+    case $arg in
+      --v=*|--verbosity=*) system_prompt+="<verbosity> The user requests a <task_plan> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
+      --reasoning) reasoning=true && system_prompt+="<reasoning> The user requests that you provide <reasoning> BEFORE the <task_plan> </reasoning>" ;;
+      --show-reasoning) show_reasoning=true ;;
+      --raw|--r) raw=true ;;
+      *) args+=("$arg") ;;
     esac
   done
-  shift $((OPTIND-1))
-  if [[ "$verbosity" -gt 0 ]]; then
-    system_prompt+="
-    <IMPORTANT>
-    The user requested a response with verbosity: $verbosity of 9
-    </IMPORTANT>
-    "
+  
+  shell_commander_response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
+  shell_command="$(echo "$shell_commander_response" | awk 'BEGIN{RS="<shell_command>"} NR==2' | awk 'BEGIN{RS="</shell_command>"} NR==1' | sed '/^ *#/d;/^$/d')" 
+  if [ "$raw" = true ]; then
+    echo -n "$shell_command"
+  else
+    if [ "$reasoning" = true ]; then
+      reasoning="$(echo "$shell_commander_response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
+      if [ "$show_reasoning" = true ]; then
+        echo "$reasoning"
+      fi
+    fi
+    print -z "$shell_command"
   fi
-  response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream)
-  reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
-  shell_command="$(echo "$response" | awk 'BEGIN{RS="<shell_command>"} NR==2' | awk 'BEGIN{RS="</shell_command>"} NR==1' | sed '/^ *#/d;/^$/d')" 
-  if [[ "$verbosity" -gt 0 ]]; then
-    echo "Reasoning: $reasoning"
-  fi
-  print -z "$shell_command"
 }
 
 task_planner () {
@@ -321,7 +329,7 @@ commit_msg_generator() {
   git commit -m "$commit_msg"
   git push
 }
-alias commit_msg=commit_msg_generator
+alias commit=commit_msg_generator
 
 cli_ergonomics_agent () {
   # Add -raw flag to return raw response without parsing
