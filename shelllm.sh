@@ -49,20 +49,19 @@ shell-commander () {
 alias shelp=shell-commander
 
 shell-scripter () {
-  about="Generate bash shell scripts based on a user prompt"
   local system_prompt="$(which shell-scripter)"
   response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream)
   reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
-  command="$(echo "$response" | awk 'BEGIN{RS="<command>"} NR==2' | awk 'BEGIN{RS="</command>"} NR==1' | sed '/^ *#/d')"
+  script="$(echo "$response" | awk 'BEGIN{RS="<shell_script>"} NR==2' | awk 'BEGIN{RS="</shell_script>"} NR==1')"
   explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
   echo "$reasoning"
   echo "$explanation" | pv -qL 250
-  echo "$command"
+  echo "$script"
 }
 
 mindstorm-generator () {
   about="Generate a mindstorm of ideas based on a user prompt"
-	local system_prompt="$(which mindstorm_generator)"
+	local system_prompt="$(which mindstorm-generator)"
   local model
   while [[ $# -gt 0 ]]; do
     case $1 in
