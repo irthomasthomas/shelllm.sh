@@ -157,6 +157,8 @@ digraph_generator () {
   digraph="$(echo "$response" | awk 'BEGIN{RS="<digraph>"} NR==2' | awk 'BEGIN{RS="</digraph>"} NR==1')"
   echo "$digraph"
 }
+alias digraph=digraph_generator
+
 
 search_term_engineer () {
   about="Generate high quality search queries for search engines based on user input with verbosity support"
@@ -184,6 +186,7 @@ search_term_engineer () {
   echo "$search_queries"
 }
 
+
 write_agent_plan () {
   about="Write an agent plan based on a task description with verbosity support"
   local system_prompt="$(which write_agent_plan)"
@@ -209,10 +212,11 @@ write_agent_plan () {
   agent_plan="$(echo "$response" | awk 'BEGIN{RS="<agent_plan>"} NR==2' | awk 'BEGIN{RS="</agent_plan>"} NR==1')"
   echo "$agent_plan"
 }
+alias agent_plan=write_agent_plan
+
 
 write_task_plan () {
   local system_prompt="$(which write_task_plan)"
-  about="Write a detailed task plan based on a task description with verbosity support"
   local verbosity=0 opt
   while getopts "v:" opt; do
     case $opt in
@@ -235,10 +239,11 @@ write_task_plan () {
   task_plan="$(echo "$response" | awk 'BEGIN{RS="<task_plan>"} NR==2' | awk 'BEGIN{RS="</task_plan>"} NR==1')"
   echo "$task_plan"
 }
+alias task_plan=write_task_plan
 
-analytical_hierarchy_process () {
-  local system_prompt="$(which analytical_hierarchy_process)"
-  about="Perform Analytical Hierarchy Process (AHP) with verbosity support"
+
+analytical_hierarchy_process_generator () {
+  local system_prompt="$(which analytical_hierarchy_process_generator)"
   local verbosity=0 opt
   while getopts "v:" opt; do
     case $opt in
@@ -271,10 +276,12 @@ analytical_hierarchy_process () {
   AHP="$(echo "$response" | awk 'BEGIN{RS="<AHP>"} NR==2' | awk 'BEGIN{RS="</AHP>"} NR==1')"
   echo "$AHP"
 }
+alias ahp=analytical_hierarchy_process_generator
 
 
 commit() {
   local note msg commit_msg DIFF
+  local system_prompt="$(which commit)"
   note="$1"
 
   git add .
@@ -298,7 +305,7 @@ commit() {
   if ! [[ -z "$note" ]]; then
     msg+="$note"
   fi
-  commit_msg="$(echo "$DIFF" | llm -t commit135 "$msg" "${@:2}")"
+  commit_msg="$(echo "$DIFF" | llm -s $system_prompt "$msg" "${@:2}")"
   echo "$commit_msg"
   echo "CONFIRM: [y] push to repo [n] regenerate commit message"
   read confirm
