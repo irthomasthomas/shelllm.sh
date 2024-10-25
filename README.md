@@ -1,75 +1,59 @@
-# Shell Scripts Project
+# Shell Scripts for Enhanced CLI Ergonomics
 
 ## Project Description
-
-This repository contains a collection of shell scripts that provide various utilities and functionality to enhance the user's experience with the command line and system interactions. The scripts leverage large language models (LLMs) to power their capabilities, allowing users to interact with the system in more natural and intelligent ways.
+This repository contains a collection of shell scripts that enhance the user experience and functionality of the command-line interface (CLI). These scripts utilize large language models (LLMs) to provide intelligent responses and automate various tasks, making the CLI more ergonomic and efficient.
 
 The main features of this project include:
 
-1. **Shell Command Execution**: The `shell-commander` script allows users to execute shell commands with the help of an LLM, providing context-aware responses and explanations.
-2. **Shell Script Generation**: The `shell-scripter` script generates shell scripts based on user prompts, with the LLM providing the necessary reasoning and explanations.
-3. **Prompt Improvement**: The `prompt-improver` script enhances user prompts by incorporating additional context and verbosity based on the user's request.
-4. **Mindstorm Ideas Generation**: The `mindstorm-ideas-generator` script generates creative ideas and solutions using the power of the LLM.
-5. **Python Code Explanation**: The `py-explain` script provides detailed explanations of Python code, tailored to the user's requested level of verbosity.
-6. **Digraph Generation**: The `digraph_generator` script generates digraph visualizations based on user input.
-7. **Search Term Engineering**: The `search_term_engineer` script generates high-quality search queries for search engines, based on user input.
-8. **Agent and Task Planning**: The `write_agent_plan` and `write_task_plan` scripts create detailed plans for agents and tasks, respectively, using the LLM.
-9. **Analytical Hierarchy Process (AHP) Generator**: The `analytical_hierarchy_process_generator` script generates AHP-based analysis and recommendations based on user-provided ideas, criteria, and weights.
-10. **Commit Message Generation**: The `commit` script helps generate meaningful and context-aware commit messages for version control systems.
+1. **Shell Commander**: A script that allows users to execute shell commands with the help of an LLM, providing reasoning and explaining the command's purpose.
+2. **Shell Explainer**: A script that explains the purpose and functionality of shell commands.
+3. **Shell Scripter**: A script that generates shell scripts based on user input, providing reasoning and explanation for the generated code.
+4. **Prompt Improver**: A script that improves user prompts based on the input, enhancing the quality of responses from LLMs.
+5. **Mindstorm Ideas Generator**: A script that generates creative ideas for a given topic using an LLM.
+6. **Python Explanation**: A script that explains the purpose and functionality of Python code.
+7. **Digraph Generator**: A script that generates a digraph (directed graph) based on user input.
+8. **Search Term Engineer**: A script that generates high-quality search queries for search engines based on user input.
+9. **Agent Plan Writer**: A script that writes an agent plan based on a task description.
+10. **Task Plan Writer**: A script that writes a detailed task plan based on a task description.
+11. **Analytical Hierarchy Process (AHP) Generator**: A script that generates an AHP analysis based on user-provided ideas, criteria, and weights.
+12. **Commit Message Generator**: A script that generates commit messages for Git repositories based on the staged changes.
+13. **CLI Ergonomics Agent**: A script that refactors the command-line interface to improve ergonomics and usability.
 
 ## Installation
 
-To use the shell scripts in this project, you'll need to have the following dependencies installed:
-
-- [LLM (Large Language Model) CLI tool](https://github.com/anthropic-institute/llm-cli) - This tool is used to interact with the LLM and provide the necessary functionality.
-- [pv (Pipe Viewer)](https://www.ivarch.com/programs/pv.shtml) - This tool is used to display progress and verbosity in the shell scripts.
-
-You can install these dependencies using your system's package manager (e.g., `apt-get`, `yum`, `brew`, etc.).
-
-After installing the dependencies, you can clone the repository and add the scripts to your system's `PATH` environment variable for easy access.
+1. Clone the repository:
+   ```
+   git clone https://github.com/your-username/shell-scripts-for-cli-ergonomics.git
+   ```
+2. Change to the project directory:
+   ```
+   cd shell-scripts-for-cli-ergonomics
+   ```
+3. Source the shell scripts to make them available in your current shell session:
+   ```
+   source shelllm.sh
+   ```
 
 ## Usage
 
-To use the shell scripts, simply invoke them from the command line. Most of the scripts support a `-v` or `--verbosity` option to control the level of detail in the output.
+Each script in this repository has a specific purpose and can be used with various command-line arguments. Here's a brief overview of how to use each script:
 
-Here are some examples of how to use the scripts:
+1. **Shell Commander**: `shell-commander [-v <verbosity>] <command>`
+2. **Shell Explainer**: `shell-explain [-v <verbosity>] <command>`
+3. **Shell Scripter**: `shell-scripter [-v <verbosity>] <description>`
+4. **Prompt Improver**: `prompt-improver [-v <verbosity>] <prompt>`
+5. **Mindstorm Ideas Generator**: `mindstorm [-m <model>] <topic>`
+6. **Python Explanation**: `py-explain [<verbosity>] <python_code>`
+7. **Digraph Generator**: `digraph [-v <verbosity>] <input>`
+8. **Search Term Engineer**: `search_term_engineer [-v <verbosity>] <user_input> [<num_queries>]`
+9. **Agent Plan Writer**: `agent_plan [-v <verbosity>] <task_description> [<num_steps>]`
+10. **Task Plan Writer**: `task_plan [-v <verbosity>] <task_description> [<num_steps>]`
+11. **AHP Generator**: `ahp [-v <verbosity>] <industry/product> ideas criterion weights`
+12. **Commit Message Generator**: `commit [-v=<verbosity>] [-n=<note>] [<git-command-options>]`
+13. **CLI Ergonomics Agent**: `cli_ergonomics_agent [-v=<verbosity>] [-n=<note>] <command>`
 
-1. **Shell Command Execution**:
-   ```
-   $ shelp -v 3 "ls -l"
-   ```
-
-2. **Shell Script Generation**:
-   ```
-   $ scripter -v 5 "write a script to backup my home directory"
-   ```
-
-3. **Prompt Improvement**:
-   ```
-   $ prompt-improver -v 2 "generate a shell script to backup my files"
-   ```
-
-4. **Mindstorm Ideas Generation**:
-   ```
-   $ mindstorm -v 4 "generate 5 creative ideas for a new product"
-   ```
-
-5. **Python Code Explanation**:
-   ```
-   $ py-explain 3 my_python_script.py
-   ```
-
-You can refer to the individual script descriptions above for more details on how to use each functionality.
+Refer to the individual script descriptions for more details on the available options and usage.
 
 ## Contributing
 
-If you would like to contribute to this project, please follow these guidelines:
-
-1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
-3. Implement your changes and ensure they work as expected.
-4. Update the documentation (this README.md file) to reflect your changes.
-5. Commit your changes and push the branch to your fork.
-6. Submit a pull request to the main repository.
-
-We welcome contributions that enhance the functionality, improve the user experience, or add new features to the shell scripts. Please make sure your contributions align with the project's goals and follow best practices for shell scripting and LLM integration.
+Contributions to this project are welcome. If you find any issues or have ideas for new features, please feel free to create a new issue or submit a pull request. When contributing, please follow the existing coding style and conventions.
