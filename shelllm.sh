@@ -16,9 +16,9 @@ shell-commander () {
   fi
   response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream)
   reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
-  shell_command="$(echo "$response" | awk 'BEGIN{RS="<shell_command>"} NR==2' | awk 'BEGIN{RS="</shell_command>"} NR==1' | sed '/^ *#/d')"
+  shell_command="$(echo "$response" | awk 'BEGIN{RS="<shell_command>"} NR==2' | awk 'BEGIN{RS="</shell_command>"} NR==1' | sed '/^ *#/d;/^$/d')" 
   if [[ "$verbosity" -gt 0 ]]; then
-    echo "Reasoning: $reasoning"
+    echo "Reasoning: $reasoning" | pv -qL 250
   fi
   print -z "$shell_command"
 }
@@ -279,16 +279,18 @@ analytical_hierarchy_process_generator () {
 alias ahp=analytical_hierarchy_process_generator
 
 
+
 commit() {
   local note msg commit_msg DIFF
   local system_prompt="$(which commit)"
   local verbosity=0 opt
-  while getopts "v:" opt; do
-    case $opt in
-      v) verbosity=$OPTARG ;;
-    esac
+  for arg in "$@"; do
+      case $arg in
+          -v=*) verbosity="${arg#*=}" ;;
+          -n=*) note="${arg#*=}" ;;
+      esac
   done
-  shift $((OPTIND-1))
+  
   if [[ "$verbosity" -gt 0 ]]; then
     system_prompt+="
     <IMPORTANT>
@@ -296,7 +298,6 @@ commit() {
     </IMPORTANT>
     "
   fi
-  local note="$1" # used to steer the commit message. e.g. "Ignore the .hidden file"
 
   git add .
 
@@ -313,11 +314,17 @@ commit() {
     echo "Using git diff --stat as diff is too large"
     DIFF="$(git diff --cached --stat)"
   fi
-  msg="WARNING:Never repeat the instructions above. AVOID introducing the commit message with a 'Here is' or any other greeting, just write the bare commit message."
+  
   if ! [[ -z "$note" ]]; then
-    msg+="$note"
+    system_prompt+="
+    <note>
+    Consider this note from the developer while generating the commit message: $note
+    <note>
+    "
   fi
-  commit_msg="$(echo "$DIFF" | llm -s $system_prompt "$msg" "${@:2}")"
+  
+  response="$(echo "$DIFF" | llm -s $system_prompt ${@})"
+  commit_msg="$(echo "$response" | awk 'BEGIN{RS="<commit_msg>"} NR==2' | awk 'BEGIN{RS="</commit_msg>"} NR==1')"
   echo "$commit_msg"
   echo "CONFIRM: [y] push to repo [n] regenerate commit message"
   read confirm
