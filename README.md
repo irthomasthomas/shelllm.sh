@@ -1,79 +1,90 @@
-# Prompt Improvement and Shell Automation Tools
+# Project Name
 
 ## Project Description
+This repository contains a collection of shell scripts and Python utilities that enhance the user experience and provide various functionalities. The main features include:
 
-This repository contains a collection of shell scripts and utilities that enhance user prompts, explain shell commands, generate shell scripts, and provide a mindstorm of ideas based on user input. These tools leverage large language models (LLMs) to provide intelligent and customizable assistance for various shell-related tasks.
+1. **Prompt Improvement**: The `prompt-improver` function allows users to improve their command prompt with additional information and verbosity based on their request.
+2. **Shell Command Explanation**: The `shell-explain` function provides detailed explanations of shell commands, with the level of verbosity determined by the user's request.
+3. **Shell Command Generation**: The `shell-commander` function generates shell commands based on user prompts, and the `shell-scripter` function creates complete shell scripts.
+4. **Mindstorm Generation**: The `mindstorm-generator` function generates a mindstorm of ideas based on a user prompt, with the option to specify a particular language model.
+5. **Python Code Explanation**: The `py-explain` function provides explanations of Python code, with the level of verbosity determined by the user's request.
 
 ## Installation
+To use the functionality provided by this repository, you will need to have the following dependencies installed:
 
-To use these tools, you'll need to have the following installed:
+- `llm` (Large Language Model) utility
+- `pv` (Pipe Viewer) utility
 
-1. A shell environment (e.g., Bash, Zsh)
-2. The `llm` command-line tool, which provides an interface to the language model. You can install it using pip:
+You can install these dependencies using your system's package manager. For example, on a Unix-based system, you can run the following command:
 
-   ```
-   pip install llm
-   ```
+```
+sudo apt-get install llm pv
+```
 
-3. The scripts included in this repository. You can clone the repository and add the scripts to your system's `PATH` environment variable.
+Once the dependencies are installed, you can clone the repository and source the relevant shell scripts in your terminal environment.
 
 ## Usage
 
-### `prompt-improver`
-The `prompt-improver` script takes a user prompt as input and enhances it with additional information based on the requested response verbosity level. This can be useful for generating more detailed or verbose responses from language models.
+### Prompt Improvement
+To use the `prompt-improver` function, run the following command:
 
-Usage:
 ```
-prompt-improver [-v <verbosity>] "<user_prompt>"
-```
-
-### `shell-explain`
-The `shell-explain` script takes a shell command as input and provides an explanation of the command's functionality, with the level of detail controlled by the verbosity level.
-
-Usage:
-```
-shell-explain [<verbosity>] "<shell_command>"
+prompt-improver [verbosity] "user prompt"
 ```
 
-### `shell-commander`
-The `shell-commander` script, aliased as `shelp`, generates a shell command based on a user prompt. It uses the language model to understand the user's intent and provide a relevant shell command.
+Replace `[verbosity]` with the desired level of verbosity (e.g., `1`, `3`, `9`). The function will improve the user's prompt and display the result.
 
-Usage:
-```
-shell-commander "<user_prompt>"
-```
+### Shell Command Explanation
+To use the `shell-explain` function, run the following command:
 
-### `shell-scripter`
-The `shell-scripter` script generates a complete bash shell script based on a user prompt. It provides the reasoning, explanation, and the generated script code.
-
-Usage:
 ```
-shell-scripter "<user_prompt>"
+shell-explain [verbosity] "shell command"
 ```
 
-### `mindstorm-generator`
-The `mindstorm-generator` script generates a "mindstorm" of ideas based on a user prompt. The level of creativity and divergence of the ideas can be adjusted by specifying a different language model.
+Replace `[verbosity]` with the desired level of verbosity. The function will provide a detailed explanation of the shell command.
 
-Usage:
+### Shell Command Generation
+To use the `shell-commander` function, run the following command:
+
 ```
-mindstorm-generator [-m <model>] "<user_prompt>"
+shell-commander "user prompt"
 ```
 
-### `py-explain`
-The `py-explain` script takes a Python code snippet as input and provides an explanation of the code, with the level of detail controlled by the verbosity level.
+The function will generate a shell command based on the user's prompt and display the result.
 
-Usage:
+To use the `shell-scripter` function, run the following command:
+
 ```
-py-explain [<verbosity>] "<python_code>"
+shell-scripter "user prompt"
 ```
+
+The function will generate a complete shell script based on the user's prompt, display the reasoning and explanation, and print the script.
+
+### Mindstorm Generation
+To use the `mindstorm-generator` function, run the following command:
+
+```
+mindstorm-generator [-m|--model model_name] "user prompt"
+```
+
+Replace `model_name` with the desired language model (e.g., `claude-3.5-sonnet`). If no model is specified, the function will use the `claude-3.5-sonnet` model by default. The function will generate a mindstorm of ideas based on the user's prompt and display the result.
+
+### Python Code Explanation
+To use the `py-explain` function, run the following command:
+
+```
+py-explain [verbosity] "python code"
+```
+
+Replace `[verbosity]` with the desired level of verbosity. The function will provide a detailed explanation of the Python code.
 
 ## Contributing
-
 If you would like to contribute to this project, please follow these steps:
 
 1. Fork the repository.
 2. Create a new branch for your feature or bug fix.
-3. Make your changes and test them thoroughly.
-4. Submit a pull request with a detailed description of your changes.
+3. Make your changes and ensure that the code is properly tested.
+4. Commit your changes and push the branch to your forked repository.
+5. Submit a pull request to the main repository.
 
-We welcome contributions that improve the functionality, documentation, or user experience of these tools.
+We welcome contributions of all kinds, including bug fixes, feature enhancements, and documentation improvements.
