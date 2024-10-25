@@ -39,7 +39,6 @@ shell-explain () {
 }
 
 shell-commander () {
-  about="Generate a shell command based on a user prompt"
   local system_prompt="$(which shell-commander)"
   response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream)
   reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
@@ -100,3 +99,5 @@ py-explain () {
   response=$(llm -m claude-3.5-sonnet -s "$system_prompt" "$1" "${@:2}" | tee /dev/tty)
   short_explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
 }
+
+
