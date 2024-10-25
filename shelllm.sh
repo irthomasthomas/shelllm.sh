@@ -1,7 +1,7 @@
 
 prompt-improver () {
     about="Improve a user prompt with verbosity depending on the user's request"
-    local system_prompt="$(which prompt_improver)"
+    local system_prompt="$(which prompt-improver)"
     local response_verbosity=0 opt
     while getopts "v:" opt; do
         case $opt in
@@ -31,7 +31,7 @@ shell-explain () {
 	else
 		verbosity=1
 	fi
-  local system_prompt="$(which shell_explain)"
+  local system_prompt="$(which shell-explain)"
 	system_prompt+=" 
 	response_verbosity_requested: $verbosity of 9"
   	response=$(llm -s "$system_prompt" "$1" "${@:2}" | tee /dev/tty )
@@ -54,9 +54,8 @@ shell-scripter () {
   reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
   script="$(echo "$response" | awk 'BEGIN{RS="<shell_script>"} NR==2' | awk 'BEGIN{RS="</shell_script>"} NR==1')"
   explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
-  echo "$reasoning"
-  echo "$explanation" | pv -qL 250
   echo "$script"
+  echo "$explanation" | pv -qL 250
 }
 
 mindstorm-generator () {
@@ -92,11 +91,10 @@ py-explain () {
   else
     verbosity=1
   fi
-  local system_prompt="$(which python_explainer)"
+  local system_prompt="$(which py-explain)"
   system_prompt+="
   response_verbosity_requested: $verbosity of 9"
   response=$(llm -m claude-3.5-sonnet -s "$system_prompt" "$1" "${@:2}" | tee /dev/tty)
-  short_explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
+  explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
+  echo "$explanation" | pv -qL 250
 }
-
-
