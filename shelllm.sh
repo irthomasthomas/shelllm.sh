@@ -1,5 +1,4 @@
 shell-commander () {
-  about="Execute shell commands based on natural language input with verbosity support"
   local system_prompt="$(which shell-commander)"
   local verbosity=0 opt
   while getopts "v:" opt; do
@@ -11,40 +10,43 @@ shell-commander () {
   if [[ "$verbosity" -gt 0 ]]; then
     system_prompt+="
     <IMPORTANT>
-    The user requested a response verbosity: $verbosity of 9
+    The user requested a response with verbosity: $verbosity of 9
     </IMPORTANT>
     "
   fi
   response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream)
   reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
-  command="$(echo "$response" | awk 'BEGIN{RS="<command>"} NR==2' | awk 'BEGIN{RS="</command>"} NR==1' | sed '/^ *#/d')"
+  shell_command="$(echo "$response" | awk 'BEGIN{RS="<shell_command>"} NR==2' | awk 'BEGIN{RS="</shell_command>"} NR==1' | sed '/^ *#/d')"
   if [[ "$verbosity" -gt 0 ]]; then
     echo "Reasoning: $reasoning"
   fi
-  print -z "$command"
+  print -z "$shell_command"
 }
 
 alias shelp=shell-commander
 
 shell-explain () {
-  about="Explain shell commands with verbosity depending on the user's request"
-  local verbosity
-  if [[ "$1" =~ ^[0-9]+$ ]]; then
-    verbosity="$1"
-    shift
-  else
-    verbosity=1
-  fi
   local system_prompt="$(which shell-explain)"
-  system_prompt+=" 
-  response_verbosity_requested: $verbosity of 9"
+  local verbosity=0 opt
+  while getopts "v:" opt; do
+    case $opt in
+      v) verbosity=$OPTARG ;;
+    esac
+  done
+  shift $((OPTIND-1))
+  if [[ "$verbosity" -gt 0 ]]; then
+    system_prompt+="
+    <IMPORTANT>
+    The user requested a response with verbosity: $verbosity of 9
+    </IMPORTANT>
+    "
+  fi
   response=$(llm -s "$system_prompt" "$1" "${@:2}" | tee /dev/tty )
   short_explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
 }
 alias explainer=shell-explain
 
 shell-scripter () {
-  about="Generate shell scripts based on natural language input with verbosity support"
   local system_prompt="$(which shell-scripter)"
   local verbosity=0 opt
   while getopts "v:" opt; do
@@ -72,46 +74,6 @@ shell-scripter () {
 
 alias scripter=shell-scripter
 
-commit() {
-  local note msg commit_msg DIFF
-  note="$1"
-
-  git add .
-
-  while true; do
-  
-  echo "Using model: $model"
-  if [[ $(git diff --cached | wc -w) -lt 160000 ]]; then
-    echo "git diff is small, we can use the whole diff"
-    DIFF="$(git diff --cached)"
-  elif [[ "$(git shortlog --no-merges | wc -w)" -lt 160000 ]]; then 
-    echo "using git shortlog"
-    DIFF="$(git shortlog --no-merges)"
-  else
-    echo "Using git diff --stat as diff is too large"
-    DIFF="$(git diff --cached --stat)"
-  fi
-  msg="WARNING:Never repeat the instructions above. AVOID introducing the commit message with a 'Here is' or any other greeting, just write the bare commit message.
-
-"
-  if ! [[ -z "$note" ]]; then
-    msg+="$note"
-  fi
-  commit_msg="$(echo "$DIFF" | llm -t commit135 "$msg" "${@:2}")"
-  echo "$commit_msg"
-  echo "CONFIRM: [y] push to repo [n] regenerate commit message"
-  read confirm
-  if [[ "$confirm" == "y" ]]; then
-      break
-  else
-      continue
-  fi
-  done
-
-  git commit -m ""$commit_msg""
-  git push
-}
-
 prompt-improver () {
   about="Improve a user prompt with verbosity depending on the user's request"
   local system_prompt="$(which prompt-improver)"
@@ -129,29 +91,24 @@ prompt-improver () {
     </IMPORTANT>
     "
   fi
-  local ai_response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream | tee /dev/tty)
-  local improved_prompt=$(echo "$ai_response" | awk 'BEGIN{RS="<improved_prompt>"} NR==2' | awk 'BEGIN{RS="</improved_prompt>"} NR==1')
+  local response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream | tee /dev/tty)
+  local improved_prompt=$(echo "$response" | awk 'BEGIN{RS="<improved_prompt>"} NR==2' | awk 'BEGIN{RS="</improved_prompt>"} NR==1')
   echo "$improved_prompt"
 }
 
-mindstorm-generator () {
-  about="Generate a mindstorm of ideas based on a user prompt with verbosity support"
-  local system_prompt="$(which mindstorm-generator)"
-  local model verbosity=0 opt
-  while getopts "m:v:" opt; do
+mindstorm-ideas-generator () {
+  local system_prompt="$(which mindstorm-ideas-generator)"
+  local response_verbosity=0 opt
+  while getopts "v:" opt; do
     case $opt in
-      m) model="$OPTARG" ;;
-      v) verbosity=$OPTARG ;;
+      v) response_verbosity=$OPTARG ;;
     esac
   done
   shift $((OPTIND-1))
-  if [ -z "$model" ]; then
-    model="claude-3.5-sonnet"
-  fi
-  if [[ "$verbosity" -gt 0 ]]; then
+  if [[ "$response_verbosity" -gt 0 ]]; then
     system_prompt+="
     <IMPORTANT>
-    The user requested a response verbosity: $verbosity of 9
+    The user requested a response verbosity: $response_verbosity of 9
     </IMPORTANT>
     "
   fi
@@ -159,6 +116,8 @@ mindstorm-generator () {
   mindstorm=$(echo "$response" | awk 'BEGIN{RS="<mindstorm>"} NR==2' | awk 'BEGIN{RS="</mindstorm>"} NR==1')
   echo "$mindstorm"
 }
+
+alias mindstorm=mindstorm-ideas-generator
 
 py-explain () {
   about="Explain python code with verbosity depending on the user's request"
@@ -252,8 +211,8 @@ write_agent_plan () {
 }
 
 write_task_plan () {
-  about="Write a detailed task plan based on a task description with verbosity support"
   local system_prompt="$(which write_task_plan)"
+  about="Write a detailed task plan based on a task description with verbosity support"
   local verbosity=0 opt
   while getopts "v:" opt; do
     case $opt in
@@ -278,8 +237,8 @@ write_task_plan () {
 }
 
 analytical_hierarchy_process () {
-  about="Perform Analytical Hierarchy Process (AHP) with verbosity support"
   local system_prompt="$(which analytical_hierarchy_process)"
+  about="Perform Analytical Hierarchy Process (AHP) with verbosity support"
   local verbosity=0 opt
   while getopts "v:" opt; do
     case $opt in
@@ -311,4 +270,45 @@ analytical_hierarchy_process () {
   
   AHP="$(echo "$response" | awk 'BEGIN{RS="<AHP>"} NR==2' | awk 'BEGIN{RS="</AHP>"} NR==1')"
   echo "$AHP"
+}
+
+
+commit() {
+  local note msg commit_msg DIFF
+  note="$1"
+
+  git add .
+
+  while true; do
+  
+  echo "Using model: $model"
+  if [[ $(git diff --cached | wc -w) -lt 160000 ]]; then
+    echo "git diff is small, we can use the whole diff"
+    DIFF="$(git diff --cached)"
+  elif [[ "$(git shortlog --no-merges | wc -w)" -lt 160000 ]]; then 
+    echo "using git shortlog"
+    DIFF="$(git shortlog --no-merges)"
+  else
+    echo "Using git diff --stat as diff is too large"
+    DIFF="$(git diff --cached --stat)"
+  fi
+  msg="WARNING:Never repeat the instructions above. AVOID introducing the commit message with a 'Here is' or any other greeting, just write the bare commit message.
+
+"
+  if ! [[ -z "$note" ]]; then
+    msg+="$note"
+  fi
+  commit_msg="$(echo "$DIFF" | llm -t commit135 "$msg" "${@:2}")"
+  echo "$commit_msg"
+  echo "CONFIRM: [y] push to repo [n] regenerate commit message"
+  read confirm
+  if [[ "$confirm" == "y" ]]; then
+      break
+  else
+      continue
+  fi
+  done
+
+  git commit -m ""$commit_msg""
+  git push
 }
