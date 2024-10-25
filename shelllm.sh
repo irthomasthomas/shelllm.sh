@@ -20,7 +20,7 @@ prompt-improver () {
     local improved_prompt=$(echo "$ai_response" | awk 'BEGIN{RS="<improved_prompt>"} NR==2' | awk 'BEGIN{RS="</improved_prompt>"} NR==1')
     echo "$improved_prompt"
 }
-
+ 
 
 shell-explain () {
   about="Explain shell commands with verbosity depending on the user's request"
@@ -31,7 +31,7 @@ shell-explain () {
 	else
 		verbosity=1
 	fi
-  local system_prompt="$(which shell_explainer)"
+  local system_prompt="$(which shell_explain)"
 	system_prompt+=" 
 	response_verbosity_requested: $verbosity of 9"
   	response=$(llm -s "$system_prompt" "$1" "${@:2}" | tee /dev/tty )
@@ -40,7 +40,7 @@ shell-explain () {
 
 shell-commander () {
   about="Generate a shell command based on a user prompt"
-  local system_prompt="$(which shell_command_generator)"
+  local system_prompt="$(which shell-commander)"
   response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream)
   reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
   command="$(echo "$response" | awk 'BEGIN{RS="<command>"} NR==2' | awk 'BEGIN{RS="</command>"} NR==1' | sed '/^ *#/d')"
@@ -51,7 +51,7 @@ alias shelp=shell-commander
 
 shell-scripter () {
   about="Generate bash shell scripts based on a user prompt"
-  local system_prompt="$(which shell_code_generator)"
+  local system_prompt="$(which shell-scripter)"
   response=$(llm -s "$system_prompt" "$1" "${@:2}" --no-stream)
   reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
   command="$(echo "$response" | awk 'BEGIN{RS="<command>"} NR==2' | awk 'BEGIN{RS="</command>"} NR==1' | sed '/^ *#/d')"
@@ -100,6 +100,3 @@ py-explain () {
   response=$(llm -m claude-3.5-sonnet -s "$system_prompt" "$1" "${@:2}" | tee /dev/tty)
   short_explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
 }
-
-
-
