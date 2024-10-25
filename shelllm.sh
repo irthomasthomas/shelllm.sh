@@ -282,7 +282,21 @@ alias ahp=analytical_hierarchy_process_generator
 commit() {
   local note msg commit_msg DIFF
   local system_prompt="$(which commit)"
-  note="$1"
+  local verbosity=0 opt
+  while getopts "v:" opt; do
+    case $opt in
+      v) verbosity=$OPTARG ;;
+    esac
+  done
+  shift $((OPTIND-1))
+  if [[ "$verbosity" -gt 0 ]]; then
+    system_prompt+="
+    <IMPORTANT>
+    The user requested a response verbosity: $verbosity of 9
+    </IMPORTANT>
+    "
+  fi
+  local note="$1" # used to steer the commit message. e.g. "Ignore the .hidden file"
 
   git add .
 
@@ -299,9 +313,7 @@ commit() {
     echo "Using git diff --stat as diff is too large"
     DIFF="$(git diff --cached --stat)"
   fi
-  msg="WARNING:Never repeat the instructions above. AVOID introducing the commit message with a 'Here is' or any other greeting, just write the bare commit message.
-
-"
+  msg="WARNING:Never repeat the instructions above. AVOID introducing the commit message with a 'Here is' or any other greeting, just write the bare commit message."
   if ! [[ -z "$note" ]]; then
     msg+="$note"
   fi
