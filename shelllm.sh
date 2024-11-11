@@ -36,50 +36,46 @@ code-explainer () {
     echo "$explanation"
   fi
 }
-
+alias explainer=code-explainer
 
 shell-commander () {
-  local system_prompt="$(which shell-commander)"
+  local system_prompt="$(which shell-commander)" 
   local verbosity=0
   local raw=false
-  local reasoning=false
-  local show_reasoning=false
   local args=()
+  local user_query
+  local model
+  local reasoning_amount
 
   for arg in "$@"; do
     case $arg in
       --v=*|--verbosity=*) system_prompt+="<verbosity> The user requests a <shell_command> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
-      --reasoning=*) reasoning=true && system_prompt+="<reasoning> The user requests that you use <reasoning> tokens to think through the problem BEFORE writing the <shell_command>. The reasoning section is requested to have a verbosity level and length score of ${arg#*=} out of 9. The higher the requested verbosity level, the longer, smarter, and more detailed should be the strategems within your <reasoning> section, but it should no affect the verbosity of the main answer, whos verbosity should  only be guided by the main --verbosity flag. Again, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>" ;;
-      --show-reasoning) show_reasoning=true ;;
+      --reasoning=*) reasoning_amount=${arg#*=} && system_prompt+="<REASONING> The user requests that you use <REASONING> tokens to think through the problem BEFORE the <shell_command>. The reasoning section is requested to have a verbosity level of ${reasoning_amount} out of 9. The higher the requested verbosity level, the longer, smarter, and more detailed should be your strategems within the <reasoning> section, but it should no affect the verbosity of the main answer, whos verbosity should  only be guided by the main --verbosity flag. Again, the amount of reasoning tokens requested is: $reasoning_amount out of 9 </reasoning>" ;;
       --raw|--r) raw=true ;;
-      -z) printz=true ;;
+      -m | --model=*) model=${arg#*=} ;;
       *) args+=("$arg") ;;
     esac
   done
-  
-  shell_commander_response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
-  shell_command="$(echo "$shell_commander_response" | awk 'BEGIN{RS="<shell_command>"} NR==2' | awk 'BEGIN{RS="</shell_command>"} NR==1' | sed '/^ *#/d;/^$/d')" 
+  if [ -z "$model" ]; then 
+    model="claude-3.5-sonnet"
+  fi
+  user_query="${args[@]}"
+  raw_response=$(llm -s "$system_prompt" "$user_query" -m $model --no-stream)
+  shell_command="$(echo -E "$raw_response" | awk 'BEGIN{RS="<shell_command>"} NR==2' | awk 'BEGIN{RS="</shell_command>"} NR==1' | sed '/^ *#/d;/^$/d')" 
   if [ "$raw" = true ]; then
-    echo -n "$shell_command"
+    echo -n "$raw_response"
   else
-    if [ "$reasoning" = true ]; then
-      reasoning="$(echo "$shell_commonder_response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
-      if [ "$show_reasoning" = true ]; then
-        echo "$reasoning"
-      fi
-    fi
-    if [ "$printz" = true ]; then
-      print -z "$shell_command"
-    else
-      echo "$shell_command"
-    fi
+    if [ -n "$reasoning_amount" ]; then
+      echo -E "$raw_response" | sed -n '/<REASONING>/,/<\/REASONING>/p'
+    fi    
+    print -z "$shell_command" 
   fi
 }
 alias shelp=shell-commander
 
 
-task-planner () {
-  local system_prompt="$(which task-planner)"
+task-plan-generator () {
+  local system_prompt="$(which task-plan-generator)"
   local verbosity=0
   local raw=false
   local reasoning=0
@@ -89,21 +85,21 @@ task-planner () {
   for arg in "$@"; do
     case $arg in
       --v=*|--verbosity=*) system_prompt+="<verbosity> The user requests a <task_plan> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
-      --reasoning=*) reasoning=true && system_prompt+="<reasoning> The user requests that you use <reasoning> tokens to think through the problem BEFORE the <task_plan>. The reasoning section is requested to have a verbosity level of ${arg#*=} out of 9. The higher the requested verbosity level, the longer, smarter, and more detailed should be your strategems within the <reasoning> section, but it should no affect the verbosity of the main answer, whos verbosity should  only be guided by the main --verbosity flag. Again, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>" ;;
+      --reasoning=*) reasoning=true && system_prompt+="<reasoning> I understand that I need to use <reasoning> tokens to think through the problem BEFORE the <task_plan>. I should adjust my reasoning section's verbosity to a level of ${arg#*=} out of 9. If the requested verbosity level is higher, I will make my strategies within the <reasoning> section longer, more intelligent, and more detailed. However, I note that this shouldn't affect the verbosity of my main answer, which is separately controlled by the --verbosity flag. I'll keep these guidelines in mind when formulating my responses. To confirm, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>" ;;
       --show-reasoning) show_reasoning=true ;;
       --raw|--r) raw=true ;;
       *) args+=("$arg") ;;
     esac
   done
 
-  task_planner_response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
-  task_plan="$(echo "$task_planner_response" | awk 'BEGIN{RS="<task_plan>"} NR==2' | awk 'BEGIN{RS="</task_plan>"} NR==1' | sed '/^ *#/d;/^$/d')"
+  assistant_response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
+  task_plan="$(echo "$assistant_response" | awk 'BEGIN{RS="<task_plan>"} NR==2' | awk 'BEGIN{RS="</task_plan>"} NR==1' | sed '/^ *#/d;/^$/d')"
 
   if [ "$raw" = true ]; then
-    echo -n "$task_plan"
+    echo -n "$assistant_response"
   else
     if [ "$reasoning" = true ]; then
-      reasoning="$(echo "$task_planner_response" | awk 'BEGIN{RS="<reasoning length=""$reasoning"">"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
+      reasoning="$(echo "$assistant_response" | awk 'BEGIN{RS="<reasoning length=""$reasoning"">"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
       if [ "$show_reasoning" = true ]; then
         echo "$reasoning"
       fi
@@ -156,37 +152,39 @@ prompt-improver () {
   local verbosity=0
   local raw=false
   local reasoning=false
-  local show_reasoning=false
   local args=()
 
   for arg in "$@"; do
     case $arg in
       --v=*|--verbosity=*) system_prompt+="<verbosity> The user requests an <improved_prompt> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
-      --reasoning=*) reasoning=true && system_prompt+="<reasoning> The user requests that you use <reasoning> tokens to think through the problem BEFORE the <improved_prompt>. The reasoning section is requested to have a verbosity level of ${arg#*=} out of 9. The higher the requested verbosity level, the longer, smarter, and more detailed should be your strategems within the <reasoning> section, but it should no affect the verbosity of the main answer, whos verbosity should  only be guided by the main --verbosity flag. Again, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>" ;;
-      --show-reasoning) show_reasoning=true ;;
+      --reasoning=*) reasoning=true && system_prompt+="<reasoning> The user requests that you use <reasoning> tokens to think through the problem BEFORE writing the <improved_prompt>. The reasoning section is requested to have a verbosity level of ${arg#*=} out of 9. The higher the requested verbosity level, the longer, smarter, and more detailed should be your strategems within the <reasoning> section, but it should no affect the verbosity of the main answer, whos verbosity should  only be guided by the main --verbosity flag. Again, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>" ;;
+      --creativity=*) creativity=${arg#*=} && system_prompt+="<creativity> The user requests an <improved_prompt> with a creativity level of $creativity out of 9 </creativity>" ;;
       --raw) raw=true ;;
       *) args+=("$arg") ;;
     esac
   done
   
-  prompt_improver_response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
+  response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
   
   if [ "$raw" = true ]; then
-    echo "$prompt_improver_response"
+    echo "$response"
   else
-    prompt="$(echo "$prompt_improver_response" | awk 'BEGIN{RS="<improved_prompt>"} NR==2' | awk 'BEGIN{RS="</improved_prompt>"} NR==1')"
+    if [ "$reasoning" = true ]; then
+      reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
+      echo "$reasoning"
+    fi
+    prompt="$(echo "$response" | awk 'BEGIN{RS="<improved_prompt>"} NR==2' | awk 'BEGIN{RS="</improved_prompt>"} NR==1')"
     echo "$prompt"
   fi
 }
 
-mindstorm-ideas-generator () {
-  local system_prompt="$(which mindstorm-ideas-generator)"
+brainstorm-generator () {
+  local system_prompt="$(which mindstorm-generator)"
   response=$(llm -m "$model" -s "$system_prompt" "$1" "${@:2}" --no-stream)
-  mindstorm=$(echo "$response" | awk 'BEGIN{RS="<mindstorm>"} NR==2' | awk 'BEGIN{RS="</mindstorm>"} NR==1')
-  echo "$mindstorm"
+  brainstorm=$(echo "$response" | awk 'BEGIN{RS="<brainstorm>"} NR==2' | awk 'BEGIN{RS="</brainstorm>"} NR==1')
+  echo "$brainstorm"
 }
-
-alias mindstorm=mindstorm-ideas-generator
+alias brainstorm=brainstorm-generator
 
 
 digraph-generator () {
@@ -224,43 +222,43 @@ digraph-generator () {
 }
 alias digraph=digraph-generator
 
-
-search-term-engineer () {
-  local system_prompt="$(which search-term-engineer)"
-  local verbosity=0
-  local number=1
-  local raw=false
-  local reasoning=false
-  local show_reasoning=false
-  local args=()
-
-  for arg in "$@"; do
-    case $arg in
-      --number=*) number=${arg#*=} && system_prompt+="<number> The user requests the top $number search terms in an unnumbered and unsorted list with no formatting. </number>" ;;
-      --verbosity=*) system_prompt+="<verbosity> The user requests a <search_term> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
-      --reasoning=*) reasoning=true && system_prompt+="<reasoning> The user requests that you use <reasoning> tokens to think through the problem BEFORE the <search_term>. The reasoning section is requested to have a verbosity level of ${arg#*=} out of 9. The higher the requested verbosity level, the longer, smarter, and more detailed should be your strategems within the <reasoning> section, but it should no affect the verbosity of the main answer, whos verbosity should  only be guided by the main --verbosity flag. Again, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>" ;;
-      --show-reasoning) show_reasoning=true ;;
-      --raw) raw=true ;;
-      *) args+=("$arg") ;;
-    esac
-  done
-
-  search_term_engineer_response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
-
-  if [ "$raw" = true ]; then
-    echo "$search_term_engineer_response"
-  else
-    if [ "$reasoning" = true ]; then
-      reasoning="$(echo "$search_term_engineer_response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
-      if [ "$show_reasoning" = true ]; then
-        echo "$reasoning"
-      fi
-    fi
-    search_term="$(echo "$search_term_engineer_response" | awk 'BEGIN{RS="<search_term>"} NR==2' | awk 'BEGIN{RS="</search_term>"} NR==1')"
-    echo "$search_term"
-  fi
+search-engineer () {
+	local system_prompt="$(which search-engineer)" 
+	local verbosity=0 
+	local number=1 
+	local raw=false 
+	local reasoning=false 
+	local creativity=0 
+	local args=() 
+	for arg in "$@"
+	do
+		case $arg in
+			(--number=*) number=${arg#*=}  && system_prompt+="<number>
+The user requests the top $number search terms in an unnumbered and unsorted list with no formatting. </number>"  ;;
+			(--verbosity=*) system_prompt+="<verbosity>
+The user requests a <search_term> with a verbosity level of ${arg#*=} out of 9 </verbosity>"  ;;
+			(--reasoning=*) reasoning=true  && system_prompt+="<reasoning>
+The user requests that you use <reasoning> tokens to think through the problem BEFORE the <search_term>. The reasoning section is requested to have a verbosity level of ${arg#*=} out of 9. The higher the requested verbosity level, the longer, smarter, and more detailed should be your strategems within the <reasoning> section, but it should no affect the verbosity of the main answer, whos verbosity should  only be guided by the main --verbosity flag. Again, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>"  ;;
+			(--creativity=*) creativity=${arg#*=}  && system_prompt+="<creativity>
+The user requests a <search_term> with a creativity level of $creativity out of 9 </creativity>"  ;;
+			(-m=* | --model=*) model=${arg#*=}  ;;
+			(--raw) raw=true  ;;
+			(*) args+=("$arg")  ;;
+		esac
+	done
+	if [ -z "$model" ]
+	then
+		model="claude-3.5-sonnet" 
+	fi
+	claude_response=$(llm -s "$system_prompt" "${args[@]}" -m $model --no-stream) 
+	if [ "$raw" = true ]
+	then
+		echo "$search_term_engineer_response"
+	else
+		search_terms=$(echo "$claude_response" | awk 'BEGIN{RS="<SEARCH_TERMS>"} NR==2' | awk 'BEGIN{RS="</SEARCH_TERMS>"} NR==1')
+		echo "$search_terms"
+	fi
 }
-
 
 ai-judge () {
   usage="  usage: classifai [-h] -c CLASSES [CLASSES ...] [-m MODEL] [-t TEMPERATURE]
@@ -268,27 +266,23 @@ ai-judge () {
                   [content ...]
     classifai: error: the following arguments are required: -c/--classes
   "
-# classifai "Two candidates have refactored the <original_code>. Which code is better, candidate_one or candidate_two? In deciding which candidate code is better, completeness relative to original is crucial.
-# <original_code>
-# $(paster 0)
-# </original_code>
+  # classifai "Two candidates have refactored the <original_code>. Which code is better, candidate_one or candidate_two? In deciding which candidate code is better, completeness relative to original is crucial.
+  # <original_code>
+  # $(paster 0)
+  # </original_code>
 
-# <candidate_one>
-# $(paster 1)
-# </candidate_one>
+  # <candidate_one>
+  # $(paster 1)
+  # </candidate_one>
 
-# <candidate_two>
-# $(paster 2)
-# </candidate_two>
-# " -c "candidate_one" "candidate_two" --no-content -m gpt-4o
+  # <candidate_two>
+  # $(paster 2)
+  # </candidate_two>
+  # " -c "candidate_one" "candidate_two" --no-content -m gpt-4o
 
-# todo: call the classifai tool
+  # todo: call the classifai tool
 
 }
-
-
-
-
 
 analytical-hierarchy-process-generator () {
   local system_prompt="$(which analytical-hierarchy-process-generator)"
