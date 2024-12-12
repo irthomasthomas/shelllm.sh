@@ -1,3 +1,12 @@
+# INSTRUCTIONS: type 'source path/to/this/file/shelllm.sh' in your terminal. For permeant use, add this to your .bashrc or .zshrc file.
+# This is file is in flux and functions may not all conform to the same format or behavior.
+
+# Feel free to add code comments to the functions, but note that comments are stripped by the 'which' command and never reach the model.
+
+# Most functions support --reasoning=0-9, --verbosity=0-9, and --raw
+# 
+# Todo: ShellLM evals (measuring conformity to the shelllm format by mining llm logs db.)
+
 write-agent-plan () {
   local system_prompt="$(which write-agent-plan)"
 
@@ -37,8 +46,9 @@ code_explainer () {
 }
 
 alias explainer=code-explainer
-# Todo: ShellLM evals (measuring conformity to the shelllm format.)
-shelpclaude () {
+
+
+shelp () {
   local system_prompt="$(which shelpclaude)" 
   local verbosity=0
   local raw=false
@@ -72,55 +82,6 @@ shelpclaude () {
   fi
 }
 
-shelp_gemini() {
-  local system_prompt="$(which shelp_gemini)"
-  local raw=false
-  local markdown_fence=false
-  local model
-  local reasoning_amount
-  local user_query
-  local args=()
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --reasoning=*)
-        reasoning_amount="${1#*=}"
-        ;;
-      --raw|-r)
-        raw=true
-        ;;
-      -m|--model=*)
-        model="${1#*=}"
-        ;;
-      *)
-        args+=("$1")
-        ;;
-    esac
-    shift
-  done
-
-  user_query="${args[*]}
-<REASONING_LEVEL>${reasoning_amount:-0} out of 9</REASONING_LEVEL>"
-
-  local gemini_response=$(
-    llm -s "$system_prompt" "$user_query" -m "$model" --no-stream -o temperature 0
-  )
-
-  local shell_command=$(
-    echo "$gemini_response" |
-      awk 'BEGIN{RS="<shell_command>"} NR==2' | 
-      awk 'BEGIN{RS="</shell_command>"} NR==1' |
-      sed '/^ *#/d;/^$/d'
-  )
-
-  if "$raw"; then
-    printf '%s' "$gemini_response"
-  elif [[ -n "$reasoning_amount" ]]; then
-    echo "$gemini_response" | sed -n '/<REASONING>/,/<\/REASONING>/p'
-  fi
-
-  print -z "$shell_command"
-}
 
 task-plan-generator () {
   local system_prompt="$(which task-plan-generator)"
@@ -153,10 +114,12 @@ task-plan-generator () {
     echo "$task_plan"
   fi
 }
+
 alias task-plan=task-planner
 
-bash-script-generator () {
-  local system_prompt="$(which bash-script-generator)"
+
+bash_generator () {
+  local system_prompt="$(which bash_generator)"
   local verbosity=0
   local raw=false
   local reasoning=false
@@ -165,28 +128,23 @@ bash-script-generator () {
 
   for arg in "$@"; do
     case $arg in
-      --reasoning=*) reasoning=true && system_prompt+="<reasoning>${arg#*=}/9 </reasoning>" ;;
-      --show-reasoning) show_reasoning=true ;;
+      --reasoning=*) reasoning=true && system_prompt+="<reasoning> ${arg#*=}/9 </reasoning>" ;;
+      --verbosity=*) verbosity=${arg#*=} && system_prompt+="<verbosity> ${arg#*=}/9 </verbosity>" ;;
       --raw) raw=true ;;
       *) args+=("$arg") ;;
     esac
   done
   
-  bash_script_generator_response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
+  response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
   
-  if [ "$raw" = true ]; then
-    echo "$bash_script_generator_response"
-  else
-    if [ "$reasoning" = true ]; then
-      reasoning="$(echo "$bash_script_generator_response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
-      if [ "$show_reasoning" = true ]; then
-        echo "$reasoning"
-      fi
-    fi
-    bash_script="$(echo "$bash_script_generator_response" | awk 'BEGIN{RS="<bash_script>"} NR==2' | awk 'BEGIN{RS="</bash_script>"} NR==1')"
-    echo "$bash_script"
+  if "$raw"; then
+    echo "$response"
+  elif "$reasoning"; then
+      reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
+      echo "$reasoning"
   fi
-
+  bash_script="$(echo "$response" | awk 'BEGIN{RS="<bash_script>"} NR==2' | awk 'BEGIN{RS="</bash_script>"} NR==1')"
+  echo "$bash_script"
 }
 alias shell-script=shell-script-generator
 alias scripter=shell-script-generator

@@ -1,30 +1,38 @@
 shelllm_gemini () {
-	local system_prompt="$(which shelllm_gemini)" 
-	local raw=false 
-	local args=()
-    local llm_args
-	local shell_query
-	local reasoning_amount
+    local system_prompt="$(which shelllm_gemini)" raw=false args=()
+    local llm_args shell_query reasoning_amount verbosity_score reasoning verbosity generation_control gemini_response
 	for arg in "$@"
 	do
 		case $arg in
-			(--reasoning=*) reasoning_amount=${arg#*=}  && shell_query+="<REASONING_LENGTH>
-$reasoning_amount
-</REASONING_LENGTH>
-"  ;;
-			(--verbosity=*) verbosity=${arg#*=}  && shell_query+="<COT_VERBOSITY>
-$verbosity
-</COT_VERBOSITY>
-"  ;;
+            (-p=*|--prompt=*) shell_query+="<PROMPT>
+${arg#*=}
+</PROMPT>" ;;
+			(--reasoning=*) reasoning_length=${arg#*=} && reasoning=true  ;;
+			(--verbosity=*) verbosity_score=${arg#*=} && verbosity=true  ;;
 			(--raw|--r) raw=true  ;;
-			(--model=*) model=${arg#*=} ;;
-            (-p=*|--prompt=*) shell_query="<prompt>${arg#*=}</prompt>" ;;
 			(*) args+=("$arg")  ;;
 		esac
 	done
-  
-  echo "shell_query: $shell_query"
-	gemini_response="$(llm -s "$system_prompt" "$shell_query" -m $model --no-stream -o temperature 0 ${args[*]})" 
+    if [ "$reasoning" ]; then
+        generation_control+="<REASONING_LENGTH>
+$reasoning_length
+</REASONING_LENGTH>
+"
+    fi
+    
+    if [ "$verbosity" ]; then
+        generation_control+="<VERBOSITY>
+$verbosity_score
+</VERBOSITY>"
+    fi
+    shell_query+="
+<OUTPUT_FORMAT>
+$generation_control
+</OUTPUT_FORMAT>"
+    prompt="$system_prompt
+    
+    $shell_query"
+	gemini_response="$(llm  "$prompt" --no-stream ${args[*]})" 
 	shelllm_command="$(echo -E "$gemini_response" | awk 'BEGIN{RS="<COMMAND>"} NR==2' | awk 'BEGIN{RS="</COMMAND>"} NR==1'  | sed '/^ *#/d;/^$/d')" 
 	if "$raw"; then
 		echo -n "$gemini_response"
