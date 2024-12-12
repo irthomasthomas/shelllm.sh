@@ -4,8 +4,8 @@ write-agent-plan () {
 }
 alias agent-plan=write-agent-plan
 
-code-explainer () {
-  local system_prompt="$(which code-explainer)"
+code_explainer () {
+  local system_prompt="$(which code_explainer)"
   local verbosity=0
   local raw=false
   local reasoning=false
@@ -14,32 +14,32 @@ code-explainer () {
 
   for arg in "$@"; do
     case $arg in
-      --v=*|--verbosity=*) system_prompt+="<verbosity> The user requests a <task_plan> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
-      --reasoning=*) reasoning=true && system_prompt+="<reasoning> The user requests that you use <reasoning> tokens to think through the problem BEFORE the <explanation>. The reasoning section is requested to have a verbosity level of ${arg#*=} out of 9. The higher the requested verbosity level, the longer, smarter, and more detailed should be your strategems within the <reasoning> section, but it should no affect the verbosity of the main answer, who's verbosity should be only be guided by the main --verbosity flag. Again, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>" ;;
-      --show-reasoning) show_reasoning=true ;;
+      --v=*|--verbosity=*) system_prompt+="<verbosity>${arg#*=} out of (0-9)</verbosity>" ;;
+      --reasoning=*) reasoning=true && system_prompt+="<reasoning_time>${arg#*=} out of (0-9)</reasoning_time>" ;;
       --raw|--r) raw=true ;;
       *) args+=("$arg") ;;
     esac
   done
 
-  code_explainer_response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
+  response=$(llm -s "$system_prompt" "${args[@]}" --no-stream)
   if [ "$raw" = true ]; then
-    echo "$code_explainer_response"
+    echo "$response"
   else
     if [ "$reasoning" = true ]; then
-      reasoning="$(echo "$code_explainer_response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
+      reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
       if [ "$show_reasoning" = true ]; then
         echo "$reasoning"
       fi
     fi
-    explanation="$(echo "$code_explainer_response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
+    explanation="$(echo "$response" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')"
     echo "$explanation"
   fi
 }
-alias explainer=code-explainer
 
-shell-commander () {
-  local system_prompt="$(which shell-commander)" 
+alias explainer=code-explainer
+# Todo: ShellLM evals (measuring conformity to the shelllm format.)
+shelpclaude () {
+  local system_prompt="$(which shelpclaude)" 
   local verbosity=0
   local raw=false
   local args=()
@@ -71,12 +71,59 @@ shell-commander () {
     print -z "$shell_command" 
   fi
 }
-alias shelp=shell-commander
 
+shelp_gemini() {
+  local system_prompt="$(which shelp_gemini)"
+  local raw=false
+  local markdown_fence=false
+  local model
+  local reasoning_amount
+  local user_query
+  local args=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --reasoning=*)
+        reasoning_amount="${1#*=}"
+        ;;
+      --raw|-r)
+        raw=true
+        ;;
+      -m|--model=*)
+        model="${1#*=}"
+        ;;
+      *)
+        args+=("$1")
+        ;;
+    esac
+    shift
+  done
+
+  user_query="${args[*]}
+<REASONING_LEVEL>${reasoning_amount:-0} out of 9</REASONING_LEVEL>"
+
+  local gemini_response=$(
+    llm -s "$system_prompt" "$user_query" -m "$model" --no-stream -o temperature 0
+  )
+
+  local shell_command=$(
+    echo "$gemini_response" |
+      awk 'BEGIN{RS="<shell_command>"} NR==2' | 
+      awk 'BEGIN{RS="</shell_command>"} NR==1' |
+      sed '/^ *#/d;/^$/d'
+  )
+
+  if "$raw"; then
+    printf '%s' "$gemini_response"
+  elif [[ -n "$reasoning_amount" ]]; then
+    echo "$gemini_response" | sed -n '/<REASONING>/,/<\/REASONING>/p'
+  fi
+
+  print -z "$shell_command"
+}
 
 task-plan-generator () {
   local system_prompt="$(which task-plan-generator)"
-  local verbosity=0
   local raw=false
   local reasoning=0
   local show_reasoning=false
@@ -84,8 +131,7 @@ task-plan-generator () {
 
   for arg in "$@"; do
     case $arg in
-      --v=*|--verbosity=*) system_prompt+="<verbosity> The user requests a <task_plan> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
-      --reasoning=*) reasoning=true && system_prompt+="<reasoning> I understand that I need to use <reasoning> tokens to think through the problem BEFORE the <task_plan>. I should adjust my reasoning section's verbosity to a level of ${arg#*=} out of 9. If the requested verbosity level is higher, I will make my strategies within the <reasoning> section longer, more intelligent, and more detailed. However, I note that this shouldn't affect the verbosity of my main answer, which is separately controlled by the --verbosity flag. I'll keep these guidelines in mind when formulating my responses. To confirm, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>" ;;
+      --reasoning=*) reasoning=true && system_prompt+="<reasoning>${arg#*=}/9</reasoning>" ;;
       --show-reasoning) show_reasoning=true ;;
       --raw|--r) raw=true ;;
       *) args+=("$arg") ;;
@@ -119,8 +165,7 @@ bash-script-generator () {
 
   for arg in "$@"; do
     case $arg in
-      --v=*|--verbosity=*) system_prompt+="<verbosity> The user requests a <bash_script> with a verbosity level of ${arg#*=} out of 9 </verbosity>" ;;
-      --reasoning=*) reasoning=true && system_prompt+="<reasoning> The user requests that you use <reasoning> tokens to think through the problem BEFORE the <bash_script>. The reasoning section is requested to have a verbosity level of ${arg#*=} out of 9. The higher the requested verbosity level, the longer, smarter, and more detailed should be your strategems within the <reasoning> section, but it should no affect the verbosity of the main answer, whos verbosity should  only be guided by the main --verbosity flag. Again, the amount of reasoning tokens requested is: ${arg#*=} out of 9 </reasoning>" ;;
+      --reasoning=*) reasoning=true && system_prompt+="<reasoning>${arg#*=}/9 </reasoning>" ;;
       --show-reasoning) show_reasoning=true ;;
       --raw) raw=true ;;
       *) args+=("$arg") ;;
@@ -222,8 +267,8 @@ digraph-generator () {
 }
 alias digraph=digraph-generator
 
-search-engineer () {
-	local system_prompt="$(which search-engineer)" 
+search_engineer () {
+	local system_prompt="$(which search_engineer)" 
 	local verbosity=0 
 	local number=1 
 	local raw=false 
