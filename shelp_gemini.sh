@@ -15,25 +15,25 @@ ${arg#*=}
 	done
 	if [ "$reasoning" ]
 	then
-		generation_control+="<REASONING_LENGTH>
+		generation_control+="<REQUESTED_REASONING_LENGTH>
 $reasoning_length
-</REASONING_LENGTH>
+</REQUESTED_REASONING_LENGTH>
 " 
 	fi
 	if [ "$verbosity" ]
 	then
-		generation_control+="<VERBOSITY>
+		generation_control+="<COT_VERBOSITY>
 $verbosity_score
-</VERBOSITY>" 
+</COT_VERBOSITY>" 
 	fi
 	shell_query+="
+<OUTPUT_FORMAT>
 $generation_control
-" 
-	prompt="$system_prompt
-    
+</OUTPUT_FORMAT>" 
+	prompt="    
     $shell_query" 
-	gemini_response="$(llm  "$prompt" --no-stream -o temperature 0 ${args[*]})" 
-	shelllm_command="$(echo -E "$gemini_response" | awk 'BEGIN{RS="<COMMAND>"} NR==2' | awk 'BEGIN{RS="</COMMAND>"} NR==1'  | sed '/^ *#/d;/^$/d')" 
+	gemini_response="$(llm -s $system_prompt  "$prompt" --no-stream -o temperature 0 ${args[*]})" 
+	shelllm_command="$(echo -E "$gemini_response" | awk 'BEGIN{RS="<SHELL_COMMAND>"} NR==2' | awk 'BEGIN{RS="</SHELL_COMMAND>"} NR==1'  | sed '/^ *#/d;/^$/d')" 
 	if "$raw"
 	then
 		echo -n "$gemini_response"
