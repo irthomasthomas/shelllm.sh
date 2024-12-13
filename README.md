@@ -1,60 +1,48 @@
-# Shell Scripts for AI-Powered Automation
+# Shell Scripts
 
 ## Project Description
 
-This repository contains a collection of shell scripts that leverage large language models (LLMs) to provide powerful AI-driven functionality for a variety of tasks. These scripts cover a range of use cases, including code generation, task planning, prompt improvement, and more. By integrating LLMs into the shell environment, users can seamlessly incorporate AI capabilities into their everyday workflows and automate numerous tedious or complex tasks.
+This repository contains a collection of shell scripts that leverage large language models (LLMs) to provide various functionalities, including:
+
+- **shelp_gemini.sh**: A script that provides a shell-based interface to interact with an LLM, allowing users to execute shell commands and receive responses with optional reasoning and verbosity controls.
+- **auxiliary_functions.sh**: A file containing additional helper functions for the shell scripts in this repository.
+- **shelllm.sh**: A script that provides a set of functions for interacting with LLMs, including writing agent plans, explaining code, generating shell commands, and more.
+- **cli-ergonomics-engineer.sh**: A script that uses an LLM to analyze and refactor existing command-line interfaces (CLIs) to improve their ergonomics and user-friendliness.
+- **commit-msg-generator.sh**: A script that generates commit messages for Git repositories using an LLM, based on the changes staged for commit.
+- **analytical-hierarchy-process-generator.sh**: A script that uses an LLM to generate Analytical Hierarchy Process (AHP) analyses for decision-making scenarios.
+- **search-engineer.sh**: A script that uses an LLM to generate a list of relevant search terms based on a given prompt.
+- **brainstorm-generator.sh**: A script that uses an LLM to generate brainstorming ideas based on a given prompt.
+- **digraph-generator.sh**: A script that uses an LLM to generate directed graph (digraph) visualizations based on a given prompt.
+- **prompt-improver.sh**: A script that uses an LLM to generate improved prompts based on a given prompt.
+- **bash-generator.sh**: A script that uses an LLM to generate Bash scripts based on a given prompt.
+
+These scripts are designed to enhance the functionality and efficiency of various tasks by leveraging the capabilities of large language models.
 
 ## Installation
 
-To use the scripts in this repository, you will need to have the following dependencies installed:
+To use the scripts in this repository, you will need to have the following software installed:
 
-- [llm](https://github.com/anthropic-research/llm): A command-line interface for interacting with large language models.
+- A Unix-based operating system (e.g., Linux, macOS)
+- [llm](https://github.com/Anthropic/llm) command-line tool (or another tool for interacting with LLMs)
 
-Once you have the `llm` tool installed, you can clone this repository and source the relevant script files in your terminal environment. For example, to use the `shelllm_gemini` function, you would run:
+You can install the `llm` tool by following the instructions in the [llm repository](https://github.com/Anthropic/llm).
 
-```
-source path/to/repository/shelp_gemini.sh
-```
-
-Alternatively, you can add the script files to your `.bashrc` or `.zshrc` file for permanent availability.
+Once you have the necessary software installed, you can clone this repository and source the relevant script files in your shell environment.
 
 ## Usage
 
-The repository contains the following shell scripts and their corresponding functionality:
+Each script in this repository has its own set of usage instructions and options. You can find the specific usage details for each script by running the script with the `--help` or `-h` flag.
 
-### `shelp_gemini.sh`
+For example, to use the `shelp_gemini.sh` script, you can run the following command:
 
-- `shelllm_gemini`: This function allows you to interact with a large language model and execute shell commands based on the generated response. It supports options for controlling the reasoning, verbosity, and raw output of the language model.
-- `gshelp`: An alias for `shelllm_gemini`.
+```
+source /path/to/shelp_gemini.sh
+gshelp --prompt="<PROMPT>
+Explain the purpose of the Analytical Hierarchy Process (AHP) and how it can be used for decision-making.
+</PROMPT>" --reasoning=5 --verbosity=7
+```
 
-### `auxiliary_functions.sh`
-
-This file contains additional helper functions that are used by other scripts in the repository.
-
-### `shelllm.sh`
-
-This file contains a collection of functions that leverage large language models for various tasks, including:
-
-- `write-agent-plan`: Generates a plan for an agent or task.
-- `code_explainer`: Provides an explanation of code, including the reasoning behind it.
-- `explainer`: An alias for `code_explainer`.
-- `shelp`: Generates a shell command based on a user's query, with options for controlling verbosity, reasoning, and raw output.
-- `task-plan-generator`: Generates a plan for a task, with options for controlling the reasoning and raw output.
-- `task-plan`: An alias for `task-plan-generator`.
-- `bash_generator`: Generates a Bash script based on a user's input, with options for controlling verbosity, reasoning, and raw output.
-- `shell-script` and `scripter`: Aliases for `bash_generator`.
-- `prompt-improver`: Generates an improved version of a user's prompt, with options for controlling verbosity, reasoning, creativity, and raw output.
-- `brainstorm-generator`: Generates a brainstorm based on a user's input.
-- `brainstorm`: An alias for `brainstorm-generator`.
-- `digraph-generator`: Generates a directed graph (digraph) based on a user's input, with options for controlling verbosity, reasoning, and raw output.
-- `digraph`: An alias for `digraph-generator`.
-- `search_engineer`: Generates a list of search terms based on a user's input, with options for controlling the number, verbosity, reasoning, creativity, and raw output.
-- `ai-judge`: Classifies code snippets provided by two candidates, evaluating which one is better.
-- `analytical-hierarchy-process-generator`: Generates an Analytical Hierarchy Process (AHP) analysis based on user-provided ideas, criteria, and weights.
-- `ahp`: An alias for `analytical-hierarchy-process-generator`.
-- `commit-msg-generator`: Generates a commit message for a Git repository, based on the staged changes, and automatically commits and pushes the changes.
-- `commit`: An alias for `commit-msg-generator`.
-- `cli-ergonomics-engineer`: Analyzes a command-line interface and provides suggestions for improving its ergonomics.
+This will execute the `shelp_gemini` function, which will prompt the LLM to provide an explanation of the Analytical Hierarchy Process with a reasoning depth of 5 and a verbosity level of 7.
 
 ## Contributing
 
@@ -62,8 +50,8 @@ If you would like to contribute to this project, please follow these guidelines:
 
 1. Fork the repository.
 2. Create a new branch for your feature or bug fix.
-3. Implement your changes and ensure they are properly tested.
-4. Update the README.md file to document any new functionality or changes.
-5. Submit a pull request, explaining the purpose of your changes.
+3. Implement your changes and ensure they work as expected.
+4. Update the documentation (this README.md file) to reflect your changes.
+5. Submit a pull request with a detailed description of your changes.
 
 We welcome contributions that enhance the functionality, usability, or documentation of the shell scripts in this repository.
