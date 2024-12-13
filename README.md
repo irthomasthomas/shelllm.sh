@@ -1,81 +1,68 @@
-# Shell Scripts for AI-Powered Workflow Automation
+# Shelp: An AI-Powered Shell Scripting Assistant
 
 ## Project Description
 
-This repository contains a collection of shell scripts that leverage large language models (LLMs) to automate various tasks and workflows. These scripts provide a user-friendly interface to interact with the LLMs and perform a wide range of operations, including:
-
-- Generating and explaining code snippets
-- Producing task plans and bash scripts
-- Improving existing prompts
-- Generating search terms and conducting analytical hierarchy processes
-- Automatically generating and pushing commit messages to a Git repository
-- Optimizing command-line interfaces for better ergonomics
-
-The scripts are designed to enhance productivity, streamline development processes, and leverage the capabilities of LLMs to augment human intelligence.
+Shelp is a shell script repository that leverages large language models (LLMs) to enhance the shell scripting experience. The project includes a set of shell scripts that utilize the LLM to perform various tasks, such as generating shell commands, explaining code, creating task plans, and more. The goal of Shelp is to provide developers with a powerful tool that can help them automate and streamline their shell scripting workflows.
 
 ## Installation
 
-To use the scripts in this repository, you will need the following:
+To use Shelp, you will need to have the following installed:
 
-1. A working installation of the `llm` command-line tool, which provides the interface to interact with the LLMs. You can find instructions for installing the `llm` tool [here](https://github.com/Anthropic/llm).
-2. The shell scripts from this repository, which can be downloaded or cloned from the GitHub repository.
+- A compatible shell (e.g., Bash, Zsh)
+- A large language model (e.g., GPT-3, GPT-4)
 
-Once you have the necessary components, you can start using the scripts by sourcing the relevant files in your shell environment.
+To install the Shelp scripts, follow these steps:
+
+1. Clone the Shelp repository:
+
+```
+git clone https://github.com/your-username/shelp.git
+```
+
+2. Source the `shelllm.sh` file in your shell configuration file (e.g., `.bashrc`, `.zshrc`):
+
+```
+source /path/to/shelp/shelllm.sh
+```
+
+3. (Optional) Install any additional dependencies required by the shell scripts.
 
 ## Usage
 
-The repository contains the following shell scripts and their corresponding use cases:
+Shelp provides a variety of shell scripts that you can use to enhance your shell scripting experience. Here's a brief overview of the available scripts:
 
-### Shell Scripts
+### `shelp_gemini.sh`
+This script provides a shell-based interface to interact with an LLM. It supports various options, such as setting the prompt, reasoning length, and verbosity level. The script generates shell commands based on the user's input and prompts.
 
-#### `shelp_gemini.sh`
-This script provides a user-friendly interface to interact with the Gemini language model. It allows you to generate and execute shell commands based on user input and supports various options, such as setting the reasoning length and verbosity level.
-
-#### `shelllm.sh`
-The `shelllm.sh` script includes two main functions:
-1. `write-agent-plan`: Generates a task plan for an agent based on user input.
-2. `code_explainer`: Provides an explanation for a given code snippet, with the option to display the reasoning process.
-
-#### `auxiliary_functions.sh`
-This file contains auxiliary functions used by the other shell scripts in the repository.
-
-### Python Scripts
-
-There are no Python scripts in the provided repository content.
-
-### Terraform Files
-
-There are no Terraform files in the provided repository content.
-
-### Usage Examples
-
-Here are some example commands to use the provided shell scripts:
-
-```bash
-# Generate a shell command using the Gemini language model
-shelp_gemini --reasoning=5 --model=claude-3.5-sonnet "Write a Bash script to automate a backup process."
-
-# Explain a code snippet
-code_explainer --reasoning=3 --show-reasoning "def factorial(n):\n    if n == 0:\n        return 1\n    else:\n        return n * factorial(n-1)"
-
-# Generate a task plan
-write-agent-plan "Implement a new feature for the web application."
-
-# Generate a commit message and push to a Git repository
-commit-msg-generator -v=7 -n="Refactor the login functionality"
-
-# Optimize a command-line interface
-cli-ergonomics-engineer --v=5 "My CLI Tool" 
+Usage:
 ```
+shelllm_gemini --prompt="<PROMPT>" --reasoning=<REASONING_LENGTH> --verbosity=<VERBOSITY_SCORE> [other options]
+```
+
+### `auxiliary_functions.sh`
+This file contains additional helper functions that can be used in conjunction with the other Shelp scripts.
+
+### `shelllm.sh`
+This file contains the core functionality of the Shelp project, including functions for generating shell commands, explaining code, creating task plans, and more. The file is still in flux, and some functions may not conform to the same format or behavior.
+
+### `ai-judge.sh`
+This script is used to compare and evaluate code snippets provided by different candidates. It takes the original code and the candidate's refactored code as input, and uses an LLM to determine which code is better.
+
+Usage:
+```
+ai-judge "original_code" "candidate_one" "candidate_two" -c "candidate_one" "candidate_two" --no-content -m gpt-4
+```
+
+### Other Scripts
+The repository may contain additional shell scripts that provide various functionalities, such as generating commit messages, refactoring CLI interfaces, and more. Each script will have its own usage instructions and descriptions.
 
 ## Contributing
 
-If you would like to contribute to this project, please follow these guidelines:
+Contributions to the Shelp project are welcome. If you have any ideas, bug fixes, or new features you'd like to add, please follow these steps:
 
-1. Fork the repository and create a new branch for your changes.
-2. Implement your improvements or bug fixes in the appropriate shell scripts.
-3. Test your changes thoroughly and ensure they do not break existing functionality.
-4. Update the README.md file to document any new features or changes.
-5. Submit a pull request with a clear description of your changes and the problems they address.
+1. Fork the repository.
+2. Create a new branch for your changes.
+3. Make your changes and ensure they work as expected.
+4. Submit a pull request with a detailed description of your changes.
 
-Your contributions are greatly appreciated, as they help make this project more robust and useful for the community.
+Please make sure to follow the existing code style and conventions when contributing.
