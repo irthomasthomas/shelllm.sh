@@ -1,57 +1,58 @@
-# Shell Scripts
+# Shell Scripts and Language Model Integration Project
 
 ## Project Description
 
-This repository contains a collection of shell scripts that leverage large language models (LLMs) to provide various functionalities, including:
+This project showcases the integration of shell scripts with a large language model (LLM) to enhance the functionality and capabilities of command-line interfaces (CLIs). The repository contains a set of shell scripts that utilize the LLM to provide various features, such as:
 
-- **shelp_gemini.sh**: A script that provides a shell-based interface to interact with an LLM, allowing users to execute shell commands and receive responses with optional reasoning and verbosity controls.
-- **auxiliary_functions.sh**: A file containing additional helper functions for the shell scripts in this repository.
-- **shelllm.sh**: A script that provides a set of functions for interacting with LLMs, including writing agent plans, explaining code, generating shell commands, and more.
-- **cli-ergonomics-engineer.sh**: A script that uses an LLM to analyze and refactor existing command-line interfaces (CLIs) to improve their ergonomics and user-friendliness.
-- **commit-msg-generator.sh**: A script that generates commit messages for Git repositories using an LLM, based on the changes staged for commit.
-- **analytical-hierarchy-process-generator.sh**: A script that uses an LLM to generate Analytical Hierarchy Process (AHP) analyses for decision-making scenarios.
-- **search-engineer.sh**: A script that uses an LLM to generate a list of relevant search terms based on a given prompt.
-- **brainstorm-generator.sh**: A script that uses an LLM to generate brainstorming ideas based on a given prompt.
-- **digraph-generator.sh**: A script that uses an LLM to generate directed graph (digraph) visualizations based on a given prompt.
-- **prompt-improver.sh**: A script that uses an LLM to generate improved prompts based on a given prompt.
-- **bash-generator.sh**: A script that uses an LLM to generate Bash scripts based on a given prompt.
+1. **Code Explanation and Reasoning**: The `code_explainer` function allows users to request explanations and reasoning for code snippets, with customizable verbosity and reasoning levels.
+2. **Task Planning**: The `task-plan-generator` function generates task plans based on user input, with the ability to show the reasoning process.
+3. **Bash Script Generation**: The `bash_generator` function can generate bash scripts based on user prompts, with support for verbosity and reasoning levels.
+4. **Prompt Improvement**: The `prompt-improver` function can enhance user prompts, with options to control verbosity, reasoning, and creativity levels.
+5. **Brainstorming**: The `brainstorm-generator` function can provide creative brainstorming ideas based on user input.
+6. **Directed Acyclic Graph (DAG) Generation**: The `digraph-generator` function can generate visualizations of directed acyclic graphs, with support for verbosity and reasoning levels.
+7. **Search Term Recommendation**: The `search_engineer` function can suggest relevant search terms based on user input, with options for number of results, verbosity, reasoning, and creativity.
+8. **Commit Message Generation**: The `commit-msg-generator` function can generate commit messages based on the current git diff, with an interactive confirmation process.
+9. **CLI Ergonomics Improvement**: The `cli-ergonomics-engineer` function can refactor command-line interfaces to improve usability and ergonomics.
 
-These scripts are designed to enhance the functionality and efficiency of various tasks by leveraging the capabilities of large language models.
+These shell scripts leverage the capabilities of the LLM to enhance the user experience and automate various tasks within the command-line environment.
 
 ## Installation
 
-To use the scripts in this repository, you will need to have the following software installed:
+To use the shell scripts in this project, you will need to have the following installed:
 
-- A Unix-based operating system (e.g., Linux, macOS)
-- [llm](https://github.com/Anthropic/llm) command-line tool (or another tool for interacting with LLMs)
+1. A compatible shell, such as Bash or Zsh.
+2. The `llm` command-line tool, which is used to interact with the language model. You can install it using the instructions provided in the [llm repository](https://github.com/anthropic-institute/llm).
 
-You can install the `llm` tool by following the instructions in the [llm repository](https://github.com/Anthropic/llm).
+Once you have the dependencies installed, you can source the relevant shell scripts in your terminal environment. For example, to use the `shelp_gemini` function, you would run:
 
-Once you have the necessary software installed, you can clone this repository and source the relevant script files in your shell environment.
+```
+source path/to/shelp_gemini.sh
+```
+
+Alternatively, you can add the path to the shell script files to your shell's startup file (e.g., `.bashrc` or `.zshrc`) to make the functions available in every new terminal session.
 
 ## Usage
 
-Each script in this repository has its own set of usage instructions and options. You can find the specific usage details for each script by running the script with the `--help` or `-h` flag.
+Each shell script in the repository provides a specific functionality, as described in the Project Description section. You can use the functions by calling them in your terminal, optionally passing in various arguments to customize the behavior.
 
-For example, to use the `shelp_gemini.sh` script, you can run the following command:
+For example, to use the `code_explainer` function, you can run:
 
 ```
-source /path/to/shelp_gemini.sh
-gshelp --prompt="<PROMPT>
-Explain the purpose of the Analytical Hierarchy Process (AHP) and how it can be used for decision-making.
-</PROMPT>" --reasoning=5 --verbosity=7
+code_explainer --verbosity=5 path/to/code_file.py
 ```
 
-This will execute the `shelp_gemini` function, which will prompt the LLM to provide an explanation of the Analytical Hierarchy Process with a reasoning depth of 5 and a verbosity level of 7.
+This will generate an explanation of the code in the specified file, with a verbosity level of 5 out of 9.
+
+Refer to the comments and documentation within each shell script to understand the available options and how to use the different functions.
 
 ## Contributing
 
-If you would like to contribute to this project, please follow these guidelines:
+If you would like to contribute to this project, please follow these steps:
 
 1. Fork the repository.
 2. Create a new branch for your feature or bug fix.
 3. Implement your changes and ensure they work as expected.
-4. Update the documentation (this README.md file) to reflect your changes.
-5. Submit a pull request with a detailed description of your changes.
+4. Update the README.md file with any relevant information about your changes.
+5. Submit a pull request to the main repository.
 
-We welcome contributions that enhance the functionality, usability, or documentation of the shell scripts in this repository.
+We welcome contributions that enhance the functionality, usability, or documentation of the shell scripts in this project.
