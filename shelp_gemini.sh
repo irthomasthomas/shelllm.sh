@@ -1,6 +1,7 @@
 shelllm_gemini () {
-	local system_prompt="$(which shelllm_gemini)" raw=false args=() 
-	local llm_args shell_query reasoning_amount verbosity_score reasoning verbosity generation_control gemini_response
+	local system_prompt="$(which shelllm_gemini)" 
+	local llm_args shell_query reasoning_amount verbosity_score reasoning verbosity generation_control gemini_response raw=false args=()
+	system_prompt+="uname:$(uname -a)\nhostname:$(hostname)\nwhoami:$(whoami)\n\n" 
 	for arg in "$@"
 	do
 		case $arg in
@@ -13,35 +14,22 @@ ${arg#*=}
 			(*) args+=("$arg")  ;;
 		esac
 	done
-	if [ "$reasoning" ]
-	then
-		generation_control+="<REQUESTED_REASONING_LENGTH>
-$reasoning_length
-</REQUESTED_REASONING_LENGTH>
-" 
+	if [ "$reasoning" ]; then
+		generation_control+="<REQUESTED_REASONING_LENGTH>$reasoning_length</REQUESTED_REASONING_LENGTH>" 
 	fi
-	if [ "$verbosity" ]
-	then
-		generation_control+="<COT_VERBOSITY>
-$verbosity_score
-</COT_VERBOSITY>" 
+	if [ "$verbosity" ]; then
+		generation_control+="<COT_VERBOSITY>$verbosity_score</COT_VERBOSITY>" 
 	fi
-	shell_query+="
-<OUTPUT_FORMAT>
-$generation_control
-</OUTPUT_FORMAT>" 
-	prompt="    
-    $shell_query" 
-	gemini_response="$(llm -s $system_prompt  "$prompt" --no-stream -o temperature 0 ${args[*]})" 
+	shell_query+="<OUTPUT_FORMAT>$generation_control</OUTPUT_FORMAT>" 
+	prompt="$shell_query" 
+	gemini_response="$(llm -s "$system_prompt"  "$prompt" --no-stream -o temperature 0 ${args[*]})" 
+    session_id=$(llm logs list -n 1 --json | jq -r '.[] |  .conversation_id')
 	shelllm_command="$(echo -E "$gemini_response" | awk 'BEGIN{RS="<SHELL_COMMAND>"} NR==2' | awk 'BEGIN{RS="</SHELL_COMMAND>"} NR==1'  | sed '/^ *#/d;/^$/d')" 
-	if "$raw"
-	then
-		echo -n "$gemini_response"
-	elif [ -n "$reasoning_amount" ]
-	then
-		THINKING_TOKENS="$(echo -E "$gemini_response" | sed -n '/<THINKING>/,/<\/THINKING>/p')" 
+	if "$raw"; then
+        printf -v shelllm_command "%s" "$shelllm_command"
+	elif [ -n "$reasoning_amount" ]; then
+		REASONING_TOKENS="$(echo -E "$gemini_response" | sed -n '/<REASONING>/,/<\/REASONING>/p')" 
 	fi
-	print -z "$shelllm_command"
+	print -r -z "$shelllm_command"
 }
 
-alias gshelp=shelllm_gemini

@@ -47,9 +47,181 @@ code_explainer () {
 
 alias explainer=code-explainer
 
+shelllm_gemini () {
+	local system_prompt="$(which shelllm_gemini)" raw=false args=() 
+	local llm_args shell_query reasoning_amount verbosity_score reasoning verbosity generation_control gemini_response
+	for arg in "$@"
+	do
+		case $arg in
+			(-p=*|--prompt=*) shell_query+="<PROMPT>
+${arg#*=}
+</PROMPT>"  ;;
+			(--reasoning=*) reasoning_length=${arg#*=}  && reasoning=true  ;;
+			(--verbosity=*) verbosity_score=${arg#*=}  && verbosity=true  ;;
+			(--raw|--r) raw=true  ;;
+			(*) args+=("$arg")  ;;
+		esac
+	done
+	if [ "$reasoning" ]
+	then
+		generation_control+="<REQUESTED_REASONING_LENGTH>
+$reasoning_length
+</REQUESTED_REASONING_LENGTH>
+" 
+	fi
+	if [ "$verbosity" ]
+	then
+		generation_control+="<COT_VERBOSITY>
+$verbosity_score
+</COT_VERBOSITY>" 
+	fi
+	shell_query+="
+<OUTPUT_FORMAT>
+$generation_control
+</OUTPUT_FORMAT>" 
+	prompt="    
+    $shell_query" 
+	gemini_response="$(llm -s $system_prompt  "$prompt" --no-stream -o temperature 0 ${args[*]})" 
+	shelllm_command="$(echo -E "$gemini_response" | awk 'BEGIN{RS="<SHELL_COMMAND>"} NR==2' | awk 'BEGIN{RS="</SHELL_COMMAND>"} NR==1'  | sed '/^ *#/d;/^$/d')" 
+	if "$raw"
+	then
+		echo -n "$gemini_response"
+	elif [ -n "$reasoning_amount" ]
+	then
+		THINKING_TOKENS="$(echo -E "$gemini_response" | sed -n '/<THINKING>/,/<\/THINKING>/p')" 
+	fi
+	print -z "$shelllm_command"
+}
+
+
+shelllm_gemini () {
+	local system_prompt="$(which shelllm_gemini)" raw=false args=() 
+	local llm_args shell_query reasoning_amount verbosity_score reasoning verbosity generation_control gemini_response
+	for arg in "$@"
+	do
+		case $arg in
+			(-p=*|--prompt=*) shell_query+="<PROMPT>
+${arg#*=}
+</PROMPT>"  ;;
+			(--reasoning=*) reasoning_length=${arg#*=}  && reasoning=true  ;;
+			(--verbosity=*) verbosity_score=${arg#*=}  && verbosity=true  ;;
+			(--raw|--r) raw=true  ;;
+			(*) args+=("$arg")  ;;
+		esac
+	done
+	if [ "$reasoning" ]
+	then
+		generation_control+="<REQUESTED_REASONING_LENGTH>
+$reasoning_length
+</REQUESTED_REASONING_LENGTH>
+" 
+	fi
+	if [ "$verbosity" ]
+	then
+		generation_control+="<COT_VERBOSITY>
+$verbosity_score
+</COT_VERBOSITY>" 
+	fi
+	shell_query+="
+<OUTPUT_FORMAT>
+$generation_control
+</OUTPUT_FORMAT>" 
+	prompt="    
+    $shell_query" 
+	gemini_response="$(llm -s $system_prompt  "$prompt" --no-stream -o temperature 0 ${args[*]})" 
+	shelllm_commands="$(echo -E "$gemini_response" | awk 'BEGIN{RS="<SHELL_COMMANDS>"} NR==2' | awk 'BEGIN{RS="</SHELL_COMMANDS>"} NR==1'  | sed '/^ *#/d;/^$/d')" 
+	if "$raw"
+	then
+		echo -n "$gemini_response"
+	elif [ -n "$reasoning_amount" ]
+	then
+		THINKING_TOKENS="$(echo -E "$gemini_response" | sed -n '/<THINKING>/,/<\/THINKING>/p')" 
+	fi
+	print -z "$shelllm_commands"
+}
+
+gemini1 () {
+	local system_prompt="$(which shelllm_gemini)" raw=false args=() 
+	local llm_args shell_query reasoning_amount verbosity_score reasoning verbosity generation_control gemini_response
+	for arg in "$@"
+	do
+		case $arg in
+			(-p=*|--prompt=*) shell_query+="<PROMPT>
+${arg#*=}
+</PROMPT>"  ;;
+			(--reasoning=*) reasoning_length=${arg#*=}  && reasoning=true  ;;
+			(--verbosity=*) verbosity_score=${arg#*=}  && verbosity=true  ;;
+			(--raw|--r) raw=true  ;;
+			(*) args+=("$arg")  ;;
+		esac
+	done
+	if [ "$reasoning" ]
+	then
+		generation_control+="<REQUESTED_REASONING_LENGTH>
+$reasoning_length
+</REQUESTED_REASONING_LENGTH>
+" 
+	fi
+	if [ "$verbosity" ]
+	then
+		generation_control+="<COT_VERBOSITY>
+$verbosity_score
+</COT_VERBOSITY>" 
+	fi
+	shell_query+="
+<OUTPUT_FORMAT>
+$generation_control
+</OUTPUT_FORMAT>" 
+	prompt="    
+    $shell_query" 
+	gemini_response="$(llm -s $system_prompt  "$prompt" --no-stream -o temperature 0 ${args[*]})" 
+	shelllm_commands="$(echo -E "$gemini_response" | awk 'BEGIN{RS="<SHELL_COMMAND>"} NR==2' | awk 'BEGIN{RS="</SHELL_COMMAND>"} NR==1'  | sed '/^ *#/d;/^$/d')" 
+	if "$raw"
+	then
+		echo -n "$gemini_response"
+	elif [ -n "$reasoning_amount" ]
+	then
+		THINKING_TOKENS="$(echo -E "$gemini_response" | sed -n '/<THINKING>/,/<\/THINKING>/p')" 
+	fi
+	print -z "$shelllm_commands"
+}
+
+shelp_gemini () {
+	local system_prompt="$(which shelp_gemini)" raw=false markdown_fence=false model reasoning_amount user_query args=() 
+	while [[ $# -gt 0 ]]
+	do
+		case "$1" in
+			(--reasoning=*) reasoning_amount="${1#*=}"  ;;
+			(--raw | -r) raw=true  ;;
+			(-m | --model=*) model="${1#*=}"  ;;
+			(*) args+=("$1")  ;;
+		esac
+		shift
+	done
+	user_query="${args[*]}
+<REASONING_LEVEL>${reasoning_amount:-0} out of 9</REASONING_LEVEL>" 
+	local gemini_response=$(
+    llm -s "$system_prompt" "$user_query" -m "$model" --no-stream -o temperature 0
+  ) 
+	local shell_command=$(
+    echo "$gemini_response" |
+      awk 'BEGIN{RS="<shell_command>"} NR==2' | 
+      awk 'BEGIN{RS="</shell_command>"} NR==1' |
+      sed '/^ *#/d;/^$/d'
+  ) 
+	if "$raw"
+	then
+		printf '%s' "$gemini_response"
+	elif [[ -n "$reasoning_amount" ]]
+	then
+		echo "$gemini_response" | sed -n '/<REASONING>/,/<\/REASONING>/p'
+	fi
+	print -z "$shell_command"
+}
+
 
 shelp () {
-  local system_prompt="$(which shelpclaude)" 
+  local system_prompt="$(which shelp)" 
   local verbosity=0
   local raw=false
   local args=()
