@@ -430,7 +430,6 @@ brainstorm_generator() {
   if [ ! -t 0 ]; then
     local piped_content
     piped_content=$(cat)
-    args+=("$piped_content")
   fi
   
   # Process arguments
@@ -464,15 +463,6 @@ brainstorm_generator() {
       --auto-reasoning)
         auto_reasoning=true
         ;;
-      -m)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          model="-m$2"
-          shift
-        else
-          echo "Error: -m requires a model name" >&2
-          return 1
-        fi
-        ;;
       --raw)
         raw=true
         ;;
@@ -491,9 +481,9 @@ brainstorm_generator() {
     auto_select_reasoning
     show_reasoning=true  # Auto-enable reasoning display when auto-reasoning is used
   fi
-  
+  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
   # Call LLM
-  response=$(llm -s "$system_prompt" "${args[@]}" $model --no-stream)
+  response=$(echo -e "$piped_content\n$system_prompt" | llm --no-stream "${args[@]}")
   
   # Return raw response if requested
   if [ "$raw" = true ]; then
@@ -503,7 +493,10 @@ brainstorm_generator() {
   
   # Extract ideas
   ideas="$(echo "$response" | awk 'BEGIN{RS="<ideas>"} NR==2' | awk 'BEGIN{RS="</ideas>"} NR==1' | sed 's/<item>//g; s/<\/item>/\n/g' | sed '/^[[:space:]]*$/d')"
-  
+  if [[ -z "$ideas" ]]; then
+    echo "$response"
+    return
+  fi
   # Extract reasoning if available
   if [ "$thinking_level" != "none" ] && [ "$show_reasoning" = true ]; then
     reasoning="$(echo "$response" | awk 'BEGIN{RS="<thinking>"} NR==2' | awk 'BEGIN{RS="</thinking>"} NR==1')"
