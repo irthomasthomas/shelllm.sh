@@ -273,15 +273,6 @@ commit_generator() {
           return 1
         fi
         ;;
-      -m)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          model="$2"
-          shift
-        else
-          echo "Error: -m requires a model name" >&2
-          return 1
-        fi
-        ;;
       --raw)
         raw=true
         ;;
@@ -319,12 +310,7 @@ commit_generator() {
       diff="$(git diff --cached --stat)"
     fi
     
-    # Generate commit message using LLM
-    if [[ -n "$model" ]]; then
-      response=$(echo "$diff" | llm -s "$system_prompt" "${args[@]}" -m "$model" --no-stream)
-    else
-      response=$(echo "$diff" | llm -s "$system_prompt" "${args[@]}" --no-stream)
-    fi
+    response=$(echo -e "$diff" | llm -s "$system_prompt" --no-stream "${args[@]}")
     if [ "$raw" = true ]; then
       echo "$response"
       return
