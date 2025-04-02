@@ -53,6 +53,7 @@ task_plan_generator() {
   local auto_reasoning="false"
   local user_input=""
   local additional_note=""
+  local raw=false
 
   # Define thinking level descriptions
   declare -A thinking_descriptions
@@ -99,15 +100,6 @@ task_plan_generator() {
           return 1
         fi
         ;;
-      -m)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          model="-m$2"
-          shift
-        else
-          echo "Error: -m requires a model name" >&2
-          return 1
-        fi
-        ;;
       --raw)
         raw=true
         ;;
@@ -115,10 +107,7 @@ task_plan_generator() {
         auto_reasoning="true"
         ;;
       *)
-        # Collect all non-option arguments as user input if not already provided via note
-        if [[ -z "$additional_note" ]]; then
-          args+=("$1")
-        fi
+        args+=("$1")
         ;;
     esac
     shift
@@ -129,10 +118,6 @@ task_plan_generator() {
     auto_select_reasoning
   fi
 
-  # If we have arguments but no note, join them as additional note
-  if [[ -z "$additional_note" && ${#args[@]} -gt 0 ]]; then
-    additional_note="${args[*]}"
-  fi
 
   # Combine piped content with additional instructions if both exist
   if [[ -n "$user_input" && -n "$additional_note" ]]; then
@@ -142,13 +127,18 @@ task_plan_generator() {
     user_input="$additional_note"
   fi
   # Always use piping to avoid argument list too long errors
-  response=$(echo -e "$user_input" | llm -s "$system_prompt" $model --no-stream)
+  response=$(echo -e "$user_input" | llm -s "$system_prompt" --no-stream "${args[@]}")
   # Return raw response if requested
   if [ "$raw" = true ]; then
     echo "$response"
     return
   fi
   plan="$(echo "$response" | awk 'BEGIN{RS="<plan>"} NR==2' | awk 'BEGIN{RS="</plan>"} NR==1' | sed '/^ *#/d;/^$/d')"
+  # check if plan is empty
+  if [[ -z "$plan" ]]; then
+    echo "$response"
+    return
+  fi
   if [ "$thinking_level" != "none" ]; then
     thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
   fi
@@ -160,11 +150,12 @@ shelp() {
   # Generate a shell command based on user input.
   # Usage: shelp <command description> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME]
   #        cat file.txt | shelp [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME]
-  local system_prompt="write a shell command to accomplish the following task: "
+  local system_prompt="write a shell terminal command to accomplish the task described in the user input. The command will be run directly in the zsh terminal so code comments are not allowed. The command should be practical and effective, with a technical tone. code should be formatted in a code block, e.g.: \`\`\`bash"
   local thinking_level="none"
   local args=()
   local model=""
   local auto_reasoning="false"
+  local raw=false
   # Define thinking level descriptions
   declare -A thinking_descriptions
   thinking_descriptions[none]=""
@@ -215,9 +206,8 @@ shelp() {
   fi
   system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
 
-  
-  response=$(echo "$piped_content\n$system_prompt" | llm "${args[@]}" --no-stream)
-  
+  response=$(echo -e "$piped_content\n$system_prompt" | llm --no-stream "${args[@]}")
+
   if [ "$raw" = true ]; then
     echo "$response"
     return
@@ -240,6 +230,7 @@ commit_generator() {
   local note=""
   local diff=""
   local auto_reasoning="false"
+  local raw=false
 
     # Define thinking level descriptions
   declare -A thinking_descriptions
@@ -423,11 +414,10 @@ brainstorm_generator() {
     <ideas>
     1. [First idea with brief explanation]
     2. [Second idea with brief explanation]
-  ...etc.
-  </ideas>
+    ...etc.
+    </ideas>
 
-    Note: Your response should include between 5 and 10 ideas, all within the <brainstorm> tags.
-"
+    Note: Your response should include between 5 and 10 ideas, all within the <brainstorm> tags."
 
   local thinking_level="none"
   local args=()
@@ -475,10 +465,10 @@ brainstorm_generator() {
         if [[ -v "thinking_descriptions[$thinking_level]" ]]; then
           if [[ "$thinking_level" != "none" ]]; then
             system_prompt+="<thinking>
-The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
-Thinking level: $thinking_level
-${thinking_descriptions[$thinking_level]}
-</thinking>"
+  The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
+  Thinking level: $thinking_level
+  ${thinking_descriptions[$thinking_level]}
+  </thinking>"
           fi
         else
           echo "Error: Invalid thinking level. Use: none, minimal, moderate, detailed, or comprehensive" >&2
@@ -581,6 +571,7 @@ prompt_engineer() {
   local task=""
   local target_model=""
   local auto_reasoning="false"
+  local raw=false
 
   # Define thinking level descriptions
   declare -A thinking_descriptions
@@ -610,10 +601,10 @@ prompt_engineer() {
         if [[ -v "thinking_descriptions[$thinking_level]" ]]; then
           if [[ "$thinking_level" != "none" ]]; then
             system_prompt+="<thinking>
-The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
-Thinking level: $thinking_level
-${thinking_descriptions[$thinking_level]}
-</thinking>"
+  The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
+  Thinking level: $thinking_level
+  ${thinking_descriptions[$thinking_level]}
+  </thinking>"
           fi
         else
           echo "Error: Invalid thinking level. Use: none, minimal, moderate, detailed, or comprehensive" >&2
@@ -746,19 +737,19 @@ structured_chain_of_thought() {
   
   local system_prompt="You are a reasoning assistant that helps break down complex problems through structured thinking.
 
-Follow these steps to solve the problem:
-1. Problem Understanding: Clearly restate what you understand the problem to be.
-2. Approach Planning: Outline your strategy for solving this problem.
-3. Step-by-Step Reasoning: Work through your solution carefully, step-by-step.
-4. Alternative Perspectives: Consider other ways to view or approach the problem.
-5. Conclusion: Provide your final answer or solution.
+  Follow these steps to solve the problem:
+  1. Problem Understanding: Clearly restate what you understand the problem to be.
+  2. Approach Planning: Outline your strategy for solving this problem.
+  3. Step-by-Step Reasoning: Work through your solution carefully, step-by-step.
+  4. Alternative Perspectives: Consider other ways to view or approach the problem.
+  5. Conclusion: Provide your final answer or solution.
 
-Format your response with these XML tags:
-<problem_understanding>Your understanding of the problem</problem_understanding>
-<approach>Your strategy for solving the problem</approach>
-<reasoning>Your step-by-step reasoning process</reasoning>
-<alternatives>Alternative perspectives or approaches</alternatives>
-<conclusion>Your final answer or solution</conclusion>"
+  Format your response with these XML tags:
+  <problem_understanding>Your understanding of the problem</problem_understanding>
+  <approach>Your strategy for solving the problem</approach>
+  <reasoning>Your step-by-step reasoning process</reasoning>
+  <alternatives>Alternative perspectives or approaches</alternatives>
+  <conclusion>Your final answer or solution</conclusion>"
 
   local thinking_level="none"
   local args=()
@@ -766,7 +757,7 @@ Format your response with these XML tags:
   local raw=false
   local auto_reasoning="false"
   local custom_steps=""
-
+  
   # Define thinking level descriptions
   declare -A thinking_descriptions
   thinking_descriptions[none]=""
@@ -795,10 +786,10 @@ Format your response with these XML tags:
         if [[ -v "thinking_descriptions[$thinking_level]" ]]; then
           if [[ "$thinking_level" != "none" ]]; then
             system_prompt+="<thinking>
-The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
-Thinking level: $thinking_level
-${thinking_descriptions[$thinking_level]}
-</thinking>"
+  The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
+  Thinking level: $thinking_level
+  ${thinking_descriptions[$thinking_level]}
+  </thinking>"
           fi
         else
           echo "Error: Invalid thinking level. Use: none, minimal, moderate, detailed, or comprehensive" >&2
