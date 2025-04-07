@@ -47,26 +47,12 @@ task_plan_generator() {
     echo "Error: Could not locate $script_dir/prompts/task-plan-generator" >&2
     return 1
   fi
-  local thinking_level="none"
+  local thinking=false
   local args=()
   local model=""
-  local auto_reasoning="false"
   local user_input=""
   local additional_note=""
   local raw=false
-
-  # Define thinking level descriptions
-  declare -A thinking_descriptions
-  thinking_descriptions[none]=""
-  thinking_descriptions[minimal]="Briefly outline the main steps to accomplish the task."
-  thinking_descriptions[moderate]="Analyze the task requirements, consider different approaches, and outline the steps with some reasoning."
-  thinking_descriptions[detailed]="Thoroughly analyze the task parameters and devise a detailed plan. Explore various approaches, consider the relationships between different steps, and justify your choices in detail."
-  thinking_descriptions[comprehensive]="In-depth analysis of the user's request, exploring multiple approaches, considering trade-offs, and evaluating the potential effectiveness of different plans. Consider background context, implicit assumptions, and potential edge cases."
-
-  # Function to select a reasoning level automatically
-  auto_select_reasoning() {
-    system_prompt+=" <auto_reasoning>Since no reasoning level was selected, please pick one based on the complexity of the prompt provided. The reasoning levels are: none, minimal, moderate, detailed, and comprehensive. You should pick the one that will provide the best results</auto_reasoning>"
-  }
 
   # Check if input is being piped
   if [ ! -t 0 ]; then
@@ -76,20 +62,8 @@ task_plan_generator() {
   # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --thinking=*)
-        thinking_level=${1#*=}
-          if [[ -v "thinking_descriptions[$thinking_level]" ]]; then
-            if [[ "$thinking_level" != "none" ]]; then
-              system_prompt+="<thinking>
-  The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
-  Thinking level: $thinking_level
-  ${thinking_descriptions[$thinking_level]}
-  </thinking>"
-            fi
-          else
-            echo "Error: Invalid thinking level. Use: none, minimal, moderate, detailed, or comprehensive" >&2
-            return 1
-          fi
+      --think)
+        thinking=true
         ;;
       -n|--note)
         if [[ -n "$2" && ! "$2" =~ ^- ]]; then
@@ -103,20 +77,12 @@ task_plan_generator() {
       --raw)
         raw=true
         ;;
-      --auto-reasoning)
-        auto_reasoning="true"
-        ;;
       *)
         args+=("$1")
         ;;
     esac
     shift
   done
-
-  # If auto reasoning is selected and no explicit reasoning level is provided, ask the LLM to pick one
-  if [[ "$auto_reasoning" == "true" ]] && [[ "$thinking_level" == "none" ]]; then
-    auto_select_reasoning
-  fi
 
 
   # Combine piped content with additional instructions if both exist
@@ -127,6 +93,18 @@ task_plan_generator() {
     user_input="$additional_note"
   fi
   # Always use piping to avoid argument list too long errors
+  if [ "$thinking" = true ]; then
+    # Call structured_chain_of_thought if --think is specified
+    reasoning=$(echo -e "$user_input" | structured_chain_of_thought --raw "${args[@]}")
+    # Check if the response is empty
+    if [[ -n "$reasoning" ]]; then
+      # Append reasoning to the system prompt
+      user_input+="<thinking>$reasoning</thinking>"
+    else
+      echo "Error: No reasoning provided" >&2
+      return 1
+    fi
+  fi
   response=$(echo -e "$user_input" | llm -s "$system_prompt" --no-stream "${args[@]}")
   # Return raw response if requested
   if [ "$raw" = true ]; then
@@ -154,19 +132,8 @@ shelp() {
   local thinking_level="none"
   local args=()
   local model=""
-  local auto_reasoning="false"
   local raw=false
-  # Define thinking level descriptions
-  declare -A thinking_descriptions
-  thinking_descriptions[none]=""
-  thinking_descriptions[minimal]="Briefly consider the most direct shell command to accomplish the task."
-  thinking_descriptions[moderate]="Analyze the task requirements and consider alternative shell commands and options."
-  thinking_descriptions[detailed]="Thoroughly analyze the task parameters, devise a shell command strategy, and consider potential edge cases."
-  thinking_descriptions[comprehensive]="In-depth analysis of the user's request, exploring multiple shell command approaches, considering trade-offs, and evaluating the potential effectiveness of different commands."
-  # Function to select a reasoning level automatically
-  auto_select_reasoning() {
-    system_prompt+=" <auto_reasoning>Since no reasoning level was selected, please pick one based on the complexity of the prompt provided. The reasoning levels are: none, minimal, moderate, detailed, and comprehensive. You should pick the one that will provide the best results</auto_reasoning>"
-  }
+
   if [ ! -t 0 ]; then
     local piped_content
     piped_content=$(cat)
@@ -175,24 +142,9 @@ shelp() {
     case "$1" in
       --thinking=*)
         thinking_level=${1#*=}
-         if [[ -v "thinking_descriptions[$thinking_level]" ]]; then
-            if [[ "$thinking_level" != "none" ]]; then
-              system_prompt+="<thinking>
-  The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
-  Thinking level: $thinking_level
-  ${thinking_descriptions[$thinking_level]}
-  </thinking>"
-            fi
-          else
-            echo "Error: Invalid thinking level. Use: none, minimal, moderate, detailed, or comprehensive" >&2
-            return 1
-          fi
         ;;
       --raw)
         raw=true
-        ;;
-         (--auto-reasoning)
-          auto_reasoning="true"
         ;;
       *)
         args+=("$1")
@@ -200,9 +152,15 @@ shelp() {
     esac
     shift
   done
-  # If auto reasoning is selected and no explicit reasoning level is provided, ask the LLM to pick one
-  if [[ "$auto_reasoning" == "true" ]] && [[ "$thinking_level" == "none" ]]; then
-    auto_select_reasoning
+  
+  if [ "$thinking_level" != "none" ]; then
+    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}")
+    if [[ -n "$reasoning" ]]; then
+      system_prompt+="<thinking>$reasoning</thinking>"
+    else
+      echo "Error: No reasoning provided" >&2
+      return 1
+    fi
   fi
   system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
 
@@ -229,39 +187,14 @@ commit_generator() {
   local model=""
   local note=""
   local diff=""
-  local auto_reasoning="false"
   local raw=false
-
-    # Define thinking level descriptions
-  declare -A thinking_descriptions
-  thinking_descriptions[none]=""
-  thinking_descriptions[minimal]="Briefly summarize the changes."
-  thinking_descriptions[moderate]="Analyze the changes and provide a more detailed summary."
-  thinking_descriptions[detailed]="Thoroughly analyze the changes, including the purpose and impact, and generate a detailed commit message."
-  thinking_descriptions[comprehensive]="In-depth analysis of the changes, including context, motivations, and potential implications, and generate a comprehensive commit message."
-
-    # Function to select a reasoning level automatically
-  auto_select_reasoning() {
-    system_prompt+=" <auto_reasoning>Since no reasoning level was selected, please pick one based on the complexity of the prompt provided. The reasoning levels are: none, minimal, moderate, detailed, and comprehensive. You should pick the one that will provide the best results</auto_reasoning>"
-  }
+  
   
   # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --thinking=*)
         thinking_level=${1#*=}
-         if [[ -v "thinking_descriptions[$thinking_level]" ]]; then
-            if [[ "$thinking_level" != "none" ]]; then
-              system_prompt+="<thinking>
-  The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
-  Thinking level: $thinking_level
-  ${thinking_descriptions[$thinking_level]}
-  </thinking>"
-            fi
-          else
-            echo "Error: Invalid thinking level. Use: none, minimal, moderate, detailed, or comprehensive" >&2
-            return 1
-          fi
         ;;
       -n|--note)
         if [[ -n "$2" && ! "$2" =~ ^- ]]; then
@@ -276,20 +209,12 @@ commit_generator() {
       --raw)
         raw=true
         ;;
-       (--auto-reasoning)
-          auto_reasoning="true"
-        ;;
       *)
         args+=("$1")
         ;;
     esac
     shift
   done
-  
-   # If auto reasoning is selected and no explicit reasoning level is provided, ask the LLM to pick one
-  if [[ "$auto_reasoning" == "true" ]] && [[ "$thinking_level" == "none" ]]; then
-    auto_select_reasoning
-  fi
   
   # Check if we're in a git repository
   if ! git rev-parse --is-inside-work-tree &>/dev/null; then
@@ -308,6 +233,16 @@ commit_generator() {
       diff="$(git shortlog --no-merges)"
     else
       diff="$(git diff --cached --stat)"
+    fi
+    
+    if [ "$thinking_level" != "none" ]; then
+      reasoning=$(echo -e "$diff" | structured_chain_of_thought --raw "${args[@]}")
+      if [[ -n "$reasoning" ]]; then
+        system_prompt+="<thinking>$reasoning</thinking>"
+      else
+        echo "Error: No reasoning provided" >&2
+        return 1
+      fi
     fi
     
     response=$(echo -e "$diff" | llm -s "$system_prompt" --no-stream "${args[@]}")
@@ -362,13 +297,12 @@ alias commit=commit_generator
 
 brainstorm_generator() {
   # Generates a list of unique ideas based on a user query.
-  # Usage: brainstorm <topic or question> [--count=<number>] [--thinking=<level>] [--model=<model>] [--raw] [--show-reasoning] [--auto-reasoning]
+  # Usage: brainstorm <topic or question> [--count=<number>] [--thinking=<level>] [--model=<model>] [--raw] [--show-reasoning]
   # Options:
   #   --count=<number>        Number of ideas to generate (default: 10)
   #   --thinking=<level>      Control reasoning depth (none, minimal, moderate, detailed, comprehensive)
   #   --raw                   Return the raw LLM response
   #   --show-reasoning        Show reasoning process
-  #   --auto-reasoning        Automatically select appropriate reasoning level based on query complexity
 
   local system_prompt="You are a creative <brainstorm> assistant. Your task is to generate a list of unique ideas based directly on a user's query.
 
@@ -411,20 +345,6 @@ brainstorm_generator() {
   local count=10
   local raw=false
   local show_reasoning=false
-  local auto_reasoning=false
-  
-  # Define thinking level descriptions
-  declare -A thinking_descriptions
-  thinking_descriptions[none]=""
-  thinking_descriptions[minimal]="Briefly identify key concepts and potential ideas related to the user's query. Focus on the most obvious and direct approaches."
-  thinking_descriptions[moderate]="Analyze the main requirements, consider different angles and perspectives, and identify potential novel ideas. Explain why you are choosing specific ideas."
-  thinking_descriptions[detailed]="Thoroughly analyze the request parameters and devise an ideation strategy. Explore various approaches, consider the relationships between different concepts, and justify your choices in detail."
-  thinking_descriptions[comprehensive]="In-depth analysis of the user's request, exploring multiple approaches, considering trade-offs, and evaluating the potential effectiveness of different ideas. Consider background context, implicit assumptions, and potential biases."
-  
-  # Function to add auto reasoning instruction to the prompt
-  auto_select_reasoning() {
-    system_prompt+=" <auto_reasoning>Since no reasoning level was selected, please pick one based on the complexity of the prompt provided. The reasoning levels are: none, minimal, moderate, detailed, and comprehensive. You should pick the one that will provide the best results for generating ideas on this topic.</auto_reasoning>"
-  }
   
   # Check if input is being piped
   if [ ! -t 0 ]; then
@@ -447,21 +367,6 @@ brainstorm_generator() {
         ;;
       --thinking=*)
         thinking_level=${1#*=}
-        if [[ -v "thinking_descriptions[$thinking_level]" ]]; then
-          if [[ "$thinking_level" != "none" ]]; then
-            system_prompt+="<thinking>
-  The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
-  Thinking level: $thinking_level
-  ${thinking_descriptions[$thinking_level]}
-  </thinking>"
-          fi
-        else
-          echo "Error: Invalid thinking level. Use: none, minimal, moderate, detailed, or comprehensive" >&2
-          return 1
-        fi
-        ;;
-      --auto-reasoning)
-        auto_reasoning=true
         ;;
       --raw)
         raw=true
@@ -476,10 +381,14 @@ brainstorm_generator() {
     shift
   done
   
-  # If auto reasoning is selected and no explicit reasoning level is provided, ask the LLM to pick one
-  if [[ "$auto_reasoning" == true ]] && [[ "$thinking_level" == "none" ]]; then
-    auto_select_reasoning
-    show_reasoning=true  # Auto-enable reasoning display when auto-reasoning is used
+  if [ "$thinking_level" != "none" ]; then
+    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}")
+    if [[ -n "$reasoning" ]]; then
+      system_prompt+="<thinking>$reasoning</thinking>"
+    else
+      echo "Error: No reasoning provided" >&2
+      return 1
+    fi
   fi
   system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
   # Call LLM
@@ -517,14 +426,13 @@ alias brainstorm=brainstorm_generator
 
 prompt_engineer() {
   # Helps craft and refine LLM prompts with suggestions for improvements.
-  # Usage: prompt_engineer <existing_prompt> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--format=<format>] [--task=<task>] [--target-model=<model>]
-  #        cat prompt.txt | prompt_engineer [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--format=<format>] [--task=<task>] [--target-model=<model>]
+  # Usage: prompt_engineer <existing_prompt> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--format=<format>] [--task=<task>]
+  #        cat prompt.txt | prompt_engineer [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--format=<format>] [--task=<task>]
   # Options:
   #   --thinking=none|minimal|moderate|detailed|comprehensive        Level of reasoning to display
   #   -m MODEL_NAME         Specify which LLM model to use
   #   --format=<format>     Output format (standard, detailed, structured)
-  #   --task=<task>         Specific task the prompt is for (classification, generation, etc.)
-  #   --target-model=<model> Target model the prompt is designed for
+  #   --task <task>         Specific task the prompt is for (classification, generation, etc.)
   
   local system_prompt="You are a prompt engineering expert. Your task is to analyze the given prompt and suggest improvements to make it more effective for LLMs.
 
@@ -549,21 +457,7 @@ prompt_engineer() {
   local format="standard"
   local task=""
   local target_model=""
-  local auto_reasoning="false"
   local raw=false
-
-  # Define thinking level descriptions
-  declare -A thinking_descriptions
-  thinking_descriptions[none]=""
-  thinking_descriptions[minimal]="Briefly analyze the prompt and provide basic improvement suggestions."
-  thinking_descriptions[moderate]="Analyze the prompt in detail, consider different aspects, and provide more specific improvement suggestions."
-  thinking_descriptions[detailed]="Thoroughly analyze the prompt, considering the specific task, target model, and potential edge cases, and provide detailed improvement suggestions with reasoning."
-  thinking_descriptions[comprehensive]="In-depth analysis of the prompt, including context, potential biases, and trade-offs, and provide comprehensive improvement suggestions with thorough reasoning."
-
-  # Function to select a reasoning level automatically
-  auto_select_reasoning() {
-    system_prompt+=" <auto_reasoning>Since no reasoning level was selected, please pick one based on the complexity of the prompt provided. The reasoning levels are: none, minimal, moderate, detailed, and comprehensive. You should pick the one that will provide the best results</auto_reasoning>"
-  }
 
   # Check if input is being piped
   if [ ! -t 0 ]; then
@@ -577,38 +471,6 @@ prompt_engineer() {
     case "$1" in
       --thinking=*)
         thinking_level=${1#*=}
-        if [[ -v "thinking_descriptions[$thinking_level]" ]]; then
-          if [[ "$thinking_level" != "none" ]]; then
-            system_prompt+="<thinking>
-  The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
-  Thinking level: $thinking_level
-  ${thinking_descriptions[$thinking_level]}
-  </thinking>"
-          fi
-        else
-          echo "Error: Invalid thinking level. Use: none, minimal, moderate, detailed, or comprehensive" >&2
-          return 1
-        fi
-        ;;
-      --model=*|--model)
-        if [[ "$1" == "--model=*" ]]; then
-          model="-m ${1#*=}"
-        elif [[ -n "$2" && ! "$2" =~ ^- ]]; then # check if next argument is not a flag
-          model="-m $2"
-          shift
-        else
-          echo "Error: --model requires a model name" >&2
-          return 1
-        fi
-        ;;
-      -m)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          model="-m$2"
-          shift
-        else
-          echo "Error: -m requires a model name" >&2
-          return 1
-        fi
         ;;
       --raw)
         raw=true
@@ -616,16 +478,25 @@ prompt_engineer() {
       --format=*)
         format=${1#*=}
         ;;
-      --task=*)
-        task=${1#*=}
-        system_prompt+=" <task>This prompt is for ${1#*=}.</task>"
+      -n|--note)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          note="$2"
+          system_prompt+=" <note>$note</note>"
+          shift
+        else
+          echo "Error: -n/--note requires a note string" >&2
+          return 1
+        fi
         ;;
-      --target-model=*)
-        target_model=${1#*=}
-        system_prompt+=" <target_model>The prompt is intended for ${1#*=}.</target_model>"
-        ;;
-       (--auto-reasoning)
-          auto_reasoning="true"
+      --task)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          task="$2"
+          system_prompt+=" <task>$task</task>"
+          shift
+        else
+          echo "Error: --task requires a task description" >&2
+          return 1
+        fi
         ;;
       *)
         args+=("$1")
@@ -634,12 +505,19 @@ prompt_engineer() {
     shift
   done
 
-   # If auto reasoning is selected and no explicit reasoning level is provided, ask the LLM to pick one
-  if [[ "$auto_reasoning" == "true" ]] && [[ "$thinking_level" == "none" ]]; then
-    auto_select_reasoning
+   
+  if [ "$thinking_level" != "none" ]; then
+    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}")
+    if [[ -n "$reasoning" ]]; then
+      system_prompt+="<thinking>$reasoning</thinking>"
+    else
+      echo "Error: No reasoning provided" >&2
+      return 1
+    fi
   fi
   # Call LLM
-  response=$(llm -s "$system_prompt" "${args[@]}" $model --no-stream)
+  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
+  response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}")
   if [ "$raw" = true ]; then
     echo "$response"
     return
@@ -655,38 +533,10 @@ prompt_engineer() {
     echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking\n"
   fi
   
-  if [[ "$format" == "structured" ]]; then
-    echo -e "\033[1;33m📊 PROMPT ANALYSIS\033[0m\n"
-    echo -e "\033[1;32m✅ ANALYSIS:\033[0m\n$analysis\n"
-    
-    echo -e "\033[1;32m🔧 SUGGESTED IMPROVEMENTS:\033[0m"
-    count=1
-    while IFS= read -r line; do
-      if [[ -n "$line" ]]; then
-        echo -e "\033[1;36m$count.\033[0m $line"
-        ((count++))
-      fi
-    done <<< "$improvements"
-    
-    echo -e "\n\033[1;32m📝 REFINED PROMPT:\033[0m"
-    echo -e "\033[1;37m\`\`\`\n$refined_prompt\n\`\`\`\033[0m"
-    
-  elif [[ "$format" == "detailed" ]]; then
-    echo -e "\033[1;33m🔍 PROMPT ENGINEERING REPORT\033[0m\n"
-    echo -e "\033[1;32mPROMPT ANALYSIS:\033[0m\n$analysis\n"
-    
-    echo -e "\033[1;32mSUGGESTED IMPROVEMENTS:\033[0m\n"
-    count=1
-    while IFS= read -r line; do
-      if [[ -n "$line" ]]; then
-        echo -e "  \033[1;36m$count)\033[0m $line\n"
-        ((count++))
-      fi
-    done <<< "$improvements"
-    
-    echo -e "\033[1;32mREFINED PROMPT:\033[0m\n"
-    echo -e "$refined_prompt"
-    
+  # check if analysis is empty and if so return the raw response
+  if [[ -z "$analysis" ]]; then
+    echo "$response"
+    return
   else
     # Default standard format
     echo -e "\033[1;36mPROMPT ANALYSIS:\033[0m\n$analysis\n"
@@ -700,8 +550,8 @@ prompt_engineer() {
       fi
     done <<< "$improvements"
     
-    echo -e "\n\033[1;32mREFINED PROMPT:\033[0m\n$refined_prompt"
   fi
+    echo -e "\n\033[1;32mREFINED PROMPT:\033[0m\n$refined_prompt"
 }
 
 structured_chain_of_thought() {
@@ -714,96 +564,67 @@ structured_chain_of_thought() {
   #   --steps=STEPS          Define custom reasoning steps (comma-separated)
   #   --raw                  Return the raw LLM response
   
-  local system_prompt="You are a reasoning assistant that helps break down complex problems through structured thinking.
+  local system_prompt='You are a reasoning assistant that helps break down complex problems through structured thinking. Follow these steps meticulously:
 
-  Follow these steps to solve the problem:
-  1. Problem Understanding: Clearly restate what you understand the problem to be.
-  2. Approach Planning: Outline your strategy for solving this problem.
-  3. Step-by-Step Reasoning: Work through your solution carefully, step-by-step.
-  4. Alternative Perspectives: Consider other ways to view or approach the problem.
-  5. Conclusion: Provide your final answer or solution.
+1.  **Problem Understanding**:
+    *   Restate the problem in your own words to confirm understanding.
+    *   *Example*: "The user is asking to [specific task], which requires [key elements]."
+    *   Validate alignment with the user’s intent before proceeding.
+2.  **Approach Planning**:
+    *   Outline a clear, step-by-step strategy using bullet points.
+    *   *Example*: "1. Gather relevant data. 2. Apply [method]. 3. Validate results."
+    *   Justify why this approach is suitable.
+3.  **Step-by-Step Reasoning**:
+    *   Execute your plan with numbered steps, showing calculations/logic.
+    *   *Example*: "Step 1: [Action]. Step 2: [Calculation]."
+    *   Highlight assumptions and potential pitfalls.
+4.  **Alternative Perspectives**:
+    *   Propose 2-3 distinct approaches or critiques of your main method.
+    *   *Example*: "Alternative 1: Use [method X] for better accuracy. Con: Requires more time."
+5.  **Conclusion**:
+    *   Summarize findings and final answer.
+    *   Address limitations of your reasoning and suggest next steps if unresolved.
 
-  Format your response with these XML tags:
-  <problem_understanding>Your understanding of the problem</problem_understanding>
-  <approach>Your strategy for solving the problem</approach>
-  <reasoning>Your step-by-step reasoning process</reasoning>
-  <alternatives>Alternative perspectives or approaches</alternatives>
-  <conclusion>Your final answer or solution</conclusion>"
+**Formatting Rules**:
+
+*   Use XML tags exactly as specified:
+    `<problem_understanding>...</problem_understanding>`
+    `<approach>...</approach>`
+    `<reasoning>...</reasoning>`
+    `<alternatives>...</alternatives>`
+    `<conclusion>...</conclusion>`
+*   Avoid markdown; keep content plain text within tags.
+*   Adjust detail level based on problem complexity (e.g., minimal for simple tasks, detailed for ambiguous problems).
+
+**Critical Note**: If the problem is unclear, pause and ask clarifying questions before proceeding. Then, return <question>...</question> to the user for further input.'
 
   local thinking_level="none"
   local args=()
   local model=""
   local raw=false
-  local auto_reasoning="false"
   local custom_steps=""
-  
-  # Define thinking level descriptions
-  declare -A thinking_descriptions
-  thinking_descriptions[none]=""
-  thinking_descriptions[minimal]="Briefly outline each reasoning step with minimal explanation."
-  thinking_descriptions[moderate]="Provide moderate detail for each reasoning step, explaining key points and transitions."
-  thinking_descriptions[detailed]="Thoroughly explore each reasoning step, including justifications and potential implications."
-  thinking_descriptions[comprehensive]="In-depth analysis at each reasoning step, exploring multiple angles, assumptions, and potential drawbacks."
-
-  # Function to select a reasoning level automatically
-  auto_select_reasoning() {
-    system_prompt+=" <auto_reasoning>Since no reasoning level was selected, please pick one based on the complexity of the prompt provided. The reasoning levels are: none, minimal, moderate, detailed, and comprehensive. You should pick the one that will provide the best results</auto_reasoning>"
-  }
 
   # Check if input is being piped
   if [ ! -t 0 ]; then
     local piped_content
     piped_content=$(cat)
-    args+=("$piped_content")
   fi
   
   # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --thinking=*)
-        thinking_level=${1#*=}
-        if [[ -v "thinking_descriptions[$thinking_level]" ]]; then
-          if [[ "$thinking_level" != "none" ]]; then
-            system_prompt+="<thinking>
-  The user has requested that you think step-by-step and provide reasoning for your ideas before generating them.
-  Thinking level: $thinking_level
-  ${thinking_descriptions[$thinking_level]}
-  </thinking>"
-          fi
-        else
-          echo "Error: Invalid thinking level. Use: none, minimal, moderate, detailed, or comprehensive" >&2
-          return 1
-        fi
-        ;;
-      --steps=*)
-        custom_steps=${1#*=}
-        if [[ -n "$custom_steps" ]]; then
-          # Replace default steps with custom steps
-          system_prompt=$(echo "$system_prompt" | sed 's/Follow these steps to solve the problem:.*5\. Conclusion: Provide your final answer or solution\./Follow these steps to solve the problem:\n/')
-          
-          # Convert comma-separated steps to numbered list
-          IFS=',' read -ra STEPS <<< "$custom_steps"
-          step_num=1
-          for step in "${STEPS[@]}"; do
-            system_prompt+="$step_num. $step\n"
-            ((step_num++))
-          done
-        fi
-        ;;
-      -m)
+      --task)
         if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          model="-m$2"
+          task="$2"
+          system_prompt+="\n<task>\n$task\n</task>\n"
           shift
         else
-          echo "Error: -m requires a model name" >&2
+          echo "Error: --task requires a task description" >&2
           return 1
         fi
         ;;
       --raw)
         raw=true
-        ;;
-      --auto-reasoning)
-        auto_reasoning="true"
         ;;
       *)
         args+=("$1")
@@ -812,13 +633,14 @@ structured_chain_of_thought() {
     shift
   done
 
-  # If auto reasoning is selected and no explicit reasoning level is provided, ask the LLM to pick one
-  if [[ "$auto_reasoning" == "true" ]] && [[ "$thinking_level" == "none" ]]; then
-    auto_select_reasoning
-  fi
-  
+  system_prompt="
+<SYSTEM_PROMPT>
+Ensure that your main answer follows this format exactly:
+$system_prompt
+</SYSTEM_PROMPT>
+"  
   # Call LLM
-  response=$(llm -s "$system_prompt" "${args[@]}" $model --no-stream)
+  response=$(echo -e "$piped_content\n$system_prompt"  | llm --no-stream "${args[@]}")
   
   # Return raw response if requested
   if [ "$raw" = true ]; then
@@ -833,10 +655,6 @@ structured_chain_of_thought() {
   alternatives="$(echo "$response" | awk 'BEGIN{RS="<alternatives>"} NR==2' | awk 'BEGIN{RS="</alternatives>"} NR==1')"
   conclusion="$(echo "$response" | awk 'BEGIN{RS="<conclusion>"} NR==2' | awk 'BEGIN{RS="</conclusion>"} NR==1')"
   
-  if [ "$thinking_level" != "none" ]; then
-    thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
-    echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking\n"
-  fi
   
   # Display formatted output
   echo -e "\033[1;36m🔍 PROBLEM UNDERSTANDING:\033[0m\n$problem_understanding\n"
@@ -845,3 +663,4 @@ structured_chain_of_thought() {
   echo -e "\033[1;35m🔄 ALTERNATIVE PERSPECTIVES:\033[0m\n$alternatives\n"
   echo -e "\033[1;31m✅ CONCLUSION:\033[0m\n$conclusion"
 }
+
