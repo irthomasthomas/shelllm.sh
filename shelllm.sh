@@ -295,7 +295,7 @@ commit_generator() {
 alias commit=commit_generator
 
 
-brainstorm_generator() {
+novel_ideas_generator() {
   # Generates a list of unique ideas based on a user query.
   # Usage: brainstorm <topic or question> [--count=<number>] [--thinking=<level>] [--model=<model>] [--raw] [--show-reasoning]
   # Options:
@@ -421,7 +421,7 @@ brainstorm_generator() {
 }
 
 # Alias for ease of use
-alias brainstorm=brainstorm_generator
+alias brainstorm=novel_ideas_generator
 
 
 prompt_engineer() {
