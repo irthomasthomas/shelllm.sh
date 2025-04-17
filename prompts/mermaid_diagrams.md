@@ -279,3 +279,64 @@ xychart-beta
     bar [5000, 6000, 7500, 8200, 9500, 10500, 11000, 10200, 9200, 8500, 7000, 6000]
     line [5000, 6000, 7500, 8200, 9500, 10500, 11000, 10200, 9200, 8500, 7000, 6000]
 ```
+
+## 19. Code Smell Visualization
+
+Code smell visualizations highlight problematic areas in code using Mermaid diagrams. These diagrams can help developers understand structural issues and areas for improvement.
+
+### Example: Class Diagram with Code Smells
+
+```mermaid
+classDiagram
+    class User {
+        - String name
+        - String email
+        + login()
+        + logout()
+    }
+    class UserManager {
+        - List<User> users
+        + addUser(User user)
+        + removeUser(User user)
+    }
+    UserManager --> User : manages
+
+    %% Highlighting code smells
+    class UserManager {
+        %% Code Smell: God Class
+        %% Reason: Too many responsibilities
+    }
+```
+
+### Example: Flowchart with Code Smells
+
+```mermaid
+graph TD
+    A[Start] --> B{Is input valid?}
+    B -- Yes --> C[Process Input]
+    B -- No --> D[Error]
+    C --> E[End]
+
+    %% Highlighting code smells
+    B{Is input valid?}:::code-smell
+    classDef code-smell fill:#f96,stroke:#333,stroke-width:2px;
+    %% Code Smell: Complex Conditional Logic
+    %% Reason: Difficult to maintain and test
+```
+
+### Example: State Diagram with Code Smells
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Processing : start()
+    Processing --> Idle : stop()
+    Processing --> Error : fail()
+    Error --> [*]
+
+    %% Highlighting code smells
+    state Processing {
+        %% Code Smell: Long Method
+        %% Reason: Too many transitions
+    }
+```

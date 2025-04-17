@@ -24,12 +24,9 @@ script_dir="$(cd "$(dirname "$script_path")" && pwd)"
 # Change to script directory to source files
 cd "$script_dir"
 
-# Source the search_engineer.sh from the script directory
-if [[ -f "$script_dir/search_engineer.sh" ]]; then
-  source "$script_dir/search_engineer.sh"
-else
-  echo "Warning: Could not locate $script_dir/search_engineer.sh" >&2
-fi
+
+source "$script_dir/search_engineer.sh"
+source "$script_dir/code_refactor.sh"
 
 # Change back to original directory
 cd "$original_dir"
@@ -296,14 +293,7 @@ alias commit=commit_generator
 
 
 novel_ideas_generator() {
-  # Generates a list of unique ideas based on a user query.
-  # Usage: brainstorm <topic or question> [--count=<number>] [--thinking=<level>] [--model=<model>] [--raw] [--show-reasoning]
-  # Options:
-  #   --count=<number>        Number of ideas to generate (default: 10)
-  #   --thinking=<level>      Control reasoning depth (none, minimal, moderate, detailed, comprehensive)
-  #   --raw                   Return the raw LLM response
-  #   --show-reasoning        Show reasoning process
-
+  # ... existing function setup ...
   local system_prompt="You are a creative <brainstorm> assistant. Your task is to generate a list of unique ideas based directly on a user's query.
 
     Follow these steps to provide relevant ideas:
@@ -323,7 +313,7 @@ novel_ideas_generator() {
           <item>Second idea here...</item>
           ...
         </ideas>
-        
+
         </brainstorm>
     </constraints>
 
@@ -340,49 +330,89 @@ novel_ideas_generator() {
     Note: Your response should include between 5 and 10 ideas, all within the <brainstorm> tags."
 
   local thinking_level="none"
-  local args=()
-  local model=""
+  local llm_args=() # Array to hold arguments specifically for the llm command
+  local query_parts=() # Array to hold parts of the user query if not piped
   local count=10
   local raw=false
   local show_reasoning=false
-  
+  local user_input=""
+
   # Check if input is being piped
   if [ ! -t 0 ]; then
-    local piped_content
-    piped_content=$(cat)
+    user_input=$(cat)
   fi
-  
+
   # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --count)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          count="$2"
-          system_prompt+=" <count>$count</count>"
-          shift
-        else
+      --count=*)
+        count=${1#*=}
+        # Validate count is a number
+        if ! [[ "$count" =~ ^[0-9]+$ ]]; then
           echo "Error: --count requires a number" >&2
           return 1
         fi
+        system_prompt+=" <count>$count</count>"
+        shift # Consume argument
         ;;
       --thinking=*)
         thinking_level=${1#*=}
+        shift # Consume argument
         ;;
       --raw)
         raw=true
+        shift # Consume argument
         ;;
       --show-reasoning)
         show_reasoning=true
+        shift # Consume argument
         ;;
+      # Explicitly handle known llm options
+      -m)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          llm_args+=("$1" "$2") # Add -m and its value to llm_args
+          shift 2 # Consume both arguments
+        else
+          echo "Error: $1 requires a model name" >&2
+          return 1
+        fi
+        ;;
+      # Add other llm options here if needed, e.g., -t for temperature
+      # -t) ... llm_args+=("$1" "$2"); shift 2 ;;
       *)
-        args+=("$1")
+        # If input is piped, unhandled args are llm args
+        if [[ -n "$user_input" ]]; then
+           llm_args+=("$1")
+        else
+           # If not piped, unhandled args are part of the query
+           query_parts+=("$1")
+        fi
+        shift # Consume argument
         ;;
     esac
-    shift
   done
-  
+
+  # If not piped, construct user_input from query_parts
+  if [[ -z "$user_input" ]]; then
+    if [[ ${#query_parts[@]} -eq 0 ]]; then
+        echo "Error: No topic or question provided." >&2
+        echo "Usage: brainstorm <topic or question> [options]" >&2
+        echo "       cat topic.txt | brainstorm [options]" >&2
+        return 1
+    fi
+    user_input="${query_parts[*]}"
+  fi
+
+  # Ensure user_input is not empty (this check might be redundant now)
+  if [[ -z "$user_input" ]]; then
+      echo "Error: No topic or question provided." >&2
+      return 1
+  fi
+
   if [ "$thinking_level" != "none" ]; then
-    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}")
+    # Pass user_input for reasoning, and also pass llm_args
+    # Assuming structured_chain_of_thought correctly passes its args array to llm
+    reasoning=$(echo -e "$user_input" | structured_chain_of_thought --no-stream --raw "${llm_args[@]}")
     if [[ -n "$reasoning" ]]; then
       system_prompt+="<thinking>$reasoning</thinking>"
     else
@@ -391,32 +421,35 @@ novel_ideas_generator() {
     fi
   fi
   system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
-  # Call LLM
-  response=$(echo -e "$piped_content\n$system_prompt" | llm --no-stream "${args[@]}")
-  
+  # Call LLM, piping user_input and passing collected llm_args
+  response=$(echo -e "$user_input" | llm -s "$system_prompt" --no-stream "${llm_args[@]}")
+
   # Return raw response if requested
   if [ "$raw" = true ]; then
     echo "$response"
     return
   fi
-  
+
   # Extract ideas
   ideas="$(echo "$response" | awk 'BEGIN{RS="<ideas>"} NR==2' | awk 'BEGIN{RS="</ideas>"} NR==1' | sed 's/<item>//g; s/<\/item>/\n/g' | sed '/^[[:space:]]*$/d')"
   if [[ -z "$ideas" ]]; then
-    echo "$response"
-    return
+    echo "Warning: Could not extract ideas from the response." >&2
+    echo "$response" # Show raw response if extraction fails
+    return 1
   fi
-  # Extract reasoning if available
+  # Extract reasoning if available and requested
   if [ "$thinking_level" != "none" ] && [ "$show_reasoning" = true ]; then
     reasoning="$(echo "$response" | awk 'BEGIN{RS="<thinking>"} NR==2' | awk 'BEGIN{RS="</thinking>"} NR==1')"
-    echo -e "\033[1;34mReasoning:\033[0m\n$reasoning\n"
+    if [[ -n "$reasoning" ]]; then
+        echo -e "\033[1;34mReasoning:\033[0m\n$reasoning\n"
+    fi
   fi
-  
+
   # Format output (numbered only)
-  count=1
+  idea_count=1
   while IFS= read -r line; do
-    echo "$count. $line"
-    ((count++))
+    echo "$idea_count. $line"
+    ((idea_count++))
   done <<< "$ideas"
 }
 
@@ -633,14 +666,14 @@ structured_chain_of_thought() {
     shift
   done
 
-  system_prompt="
-<SYSTEM_PROMPT>
-Ensure that your main answer follows this format exactly:
-$system_prompt
-</SYSTEM_PROMPT>
-"  
+#   system_prompt+="
+# <SYSTEM_PROMPT>
+# Ensure that your main answer follows this format exactly:
+# $system_prompt
+# </SYSTEM_PROMPT>
+# "  
   # Call LLM
-  response=$(echo -e "$piped_content\n$system_prompt"  | llm --no-stream "${args[@]}")
+  response=$(echo -e "$piped_content" | llm -s $system_prompt --no-stream "${args[@]}")
   
   # Return raw response if requested
   if [ "$raw" = true ]; then
@@ -664,3 +697,76 @@ $system_prompt
   echo -e "\033[1;31m✅ CONCLUSION:\033[0m\n$conclusion"
 }
 
+llm_smell_detector() {
+  SYSTEM_PROMPT=$(cat "$script_dir/prompts/LLM_SMELL.md")
+
+local args=()
+local raw=false
+local piped_content=""
+
+# Check for piped input
+if [ ! -t 0 ]; then
+  piped_content=$(cat)
+fi
+
+# Process arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --raw)
+      raw=true
+      ;;
+    *)
+      args+=("$1")
+      ;;
+  esac
+  shift
+done
+
+# If no piped content, use first argument as input file
+if [[ -z "$piped_content" && ${#args[@]} -gt 0 && -f "${args[0]}" ]]; then
+  piped_content=$(cat "${args[0]}")
+  unset 'args[0]'
+elif [[ -z "$piped_content" && ${#args[@]} -gt 0 ]]; then
+  piped_content="${args[*]}"
+  args=()
+fi
+
+if [[ -z "$piped_content" ]]; then
+  echo "Error: No LLM output provided (pipe input or pass a file/argument)" >&2
+  return 1
+fi
+
+response=$(echo -e "$piped_content" | llm -s "$SYSTEM_PROMPT" --no-stream "${args[@]}")
+
+if [ "$raw" = true ]; then
+  echo "$response"
+  return
+fi
+
+# Extract and pretty-print smells
+smells="$(echo "$response" | awk 'BEGIN{RS="<item>"} NR>1 {print "<item>"$0}' | sed 's/<\/smells>//g')"
+if [[ -z "$smells" ]]; then
+  echo "$response"
+  return
+fi
+
+count=1
+echo -e "\033[1;36mDetected LLM Smells:\033[0m"
+while IFS= read -r item; do
+  smell=$(echo "$item" | awk 'BEGIN{RS="<smell>"} NR==2' | awk 'BEGIN{RS="</smell>"} NR==1')
+  evidence=$(echo "$item" | awk 'BEGIN{RS="<evidence>"} NR==2' | awk 'BEGIN{RS="</evidence>"} NR==1')
+  explanation=$(echo "$item" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')
+  suggestion=$(echo "$item" | awk 'BEGIN{RS="<suggestion>"} NR==2' | awk 'BEGIN{RS="</suggestion>"} NR==1')
+  echo -e "\n\033[1;33m$count. $smell\033[0m"
+  if [[ -n "$evidence" ]]; then
+    echo -e "  \033[1;34mEvidence:\033[0m $evidence"
+  fi
+  if [[ -n "$explanation" ]]; then
+    echo -e "  \033[1;32mExplanation:\033[0m $explanation"
+  fi
+  if [[ -n "$suggestion" ]]; then
+    echo -e "  \033[1;35mSuggestion:\033[0m $suggestion"
+  fi
+  ((count++))
+done <<< "$smells"
+}

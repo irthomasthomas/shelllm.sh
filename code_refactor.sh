@@ -79,6 +79,8 @@ EOF
   local language=""
   local context=""
   local user_input=""
+  local llm_args=()
+  local input_parts=()
   
   # Check if input is being piped
   if [ ! -t 0 ]; then
@@ -103,8 +105,7 @@ EOF
         ;;
       -m)
         if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          model="$2"
-          args+=("-m" "$model")
+          llm_args+=("$1" "$2")
           shift
         else
           echo "Error: -m requires a model name" >&2
@@ -115,11 +116,19 @@ EOF
         raw=true
         ;;
       *)
-        args+=("$1")
+        if [[ -n "$user_input" ]]; then
+          llm_args+=("$1")
+        else
+          input_parts+=("$1")
+        fi
         ;;
     esac
     shift
   done
+
+  if [[ -z "$user_input" ]]; then
+    user_input="${input_parts[*]}"
+  fi
 
   # Prepare input format
   local formatted_input="**Target Language:** \`$language\`
@@ -141,7 +150,7 @@ $user_input
 
   # Call LLM
   system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
-  response=$(echo -e "$formatted_input\n$system_prompt" | llm --no-stream "${args[@]}")
+  response=$(echo -e "$formatted_input\n$system_prompt" | llm --no-stream "${llm_args[@]}")
 
   # Return raw response if requested
   if [ "$raw" = true ]; then

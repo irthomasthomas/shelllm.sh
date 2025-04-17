@@ -73,6 +73,9 @@ Then provide one search query per line, with no additional formatting, numbering
     args+=("$piped_content")
   fi
 
+  local llm_args=()
+  local input_parts=()
+
   while [[ $# -gt 0 ]]
   do
     case "$1" in
@@ -88,29 +91,38 @@ Then provide one search query per line, with no additional formatting, numbering
         fi ;;
       (--auto-reasoning)
         auto_reasoning="true" ;;
-      (-m) if [[ -n "$2" && ! "$2" =~ ^- ]]
-        then
-          model="-m$2"
+      (-m)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          llm_args+=("$1" "$2")
           shift
         else
           echo "Error: -m requires a model name" >&2
           return 1
         fi ;;
-    (--raw)
+      (--raw)
         raw="true" ;;
       (--count=*) count=${1#*=}
         system_prompt+=" <count>Generate approximately $count search queries.</count>" ;;
-      (*) args+=("$1") ;;
+      (*)
+        if [[ -n "$piped_content" ]]; then
+          llm_args+=("$1")
+        else
+          input_parts+=("$1")
+        fi ;;
     esac
     shift
   done
+
+  if [[ -z "$piped_content" ]]; then
+    piped_content="${input_parts[*]}"
+  fi
 
   # If auto reasoning is selected and no explicit reasoning level is provided, ask the LLM to pick one
   if [[ "$auto_reasoning" == "true" ]] && [[ "$thinking_level" == "none" ]]; then
     auto_select_reasoning
   fi
 
-  response=$(llm -s "$system_prompt" "${args[@]}" "$model" --no-stream)
+  response=$(llm -s "$system_prompt" "${llm_args[@]}" --no-stream)
   # Return raw response if requested
   if [ "$raw" = true ]; then
     echo "$response"
