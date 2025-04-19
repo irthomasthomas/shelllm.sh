@@ -48,16 +48,16 @@
  
 
 Your task: Given the following LLM-generated output, identify and explain any 'LLM smells' present. For each detected smell, provide:
-- <smell>: Name of the smell (e.g., Repetitiveness, Over-Verbosity, Hallucination, etc.)
 - <evidence>: The specific text or pattern from the output that demonstrates the smell.
+- <smell>: Name of the smell (e.g., Repetitiveness, Over-Verbosity, Hallucination, etc.)
 - <explanation>: Why this is a smell and its likely cause.
 - <suggestion>: How to mitigate or improve the output.
 
 Format your response using this XML structure:
 <smells>
 <item>
-  <smell>...</smell>
   <evidence>...</evidence>
+  <smell>...</smell>
   <explanation>...</explanation>
   <suggestion>...</suggestion>
 </item>
@@ -67,8 +67,8 @@ Format your response using this XML structure:
 If no smells are found, return:
 <smells>
 <item>
-  <smell>None detected</smell>
   <evidence></evidence>
+  <smell>None detected</smell>
   <explanation>The output does not exhibit any common LLM smells.</explanation>
   <suggestion>No changes needed.</suggestion>
 </item>

@@ -18,17 +18,11 @@ if [[ ! "$script_path" = /* ]]; then
   script_path="$original_dir/$script_path"
 fi
 
-# Get the script directory
+# Get the script directory and source the necessary files
 script_dir="$(cd "$(dirname "$script_path")" && pwd)"
-
-# Change to script directory to source files
 cd "$script_dir"
-
-
 source "$script_dir/search_engineer.sh"
 source "$script_dir/code_refactor.sh"
-
-# Change back to original directory
 cd "$original_dir"
 
 task_plan_generator() {
@@ -125,7 +119,7 @@ shelp() {
   # Generate a shell command based on user input.
   # Usage: shelp <command description> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME]
   #        cat file.txt | shelp [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME]
-  local system_prompt="write a shell terminal command to accomplish the task described in the user input. The command will be run directly in the zsh terminal so code comments are not allowed. The command should be practical and effective, with a technical tone. code should be formatted in a code block, e.g.: \`\`\`bash"
+  local system_prompt="write as many shell terminal commands as needed to accomplish the task described in the user input. The command will be run directly in the zsh terminal so code comments are not allowed. The command should be practical and effective, with a technical tone. code should be formatted in a code block, e.g.: \`\`\`bash"
   local thinking_level="none"
   local args=()
   local model=""
@@ -161,18 +155,27 @@ shelp() {
   fi
   system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
 
-  response=$(echo -e "$piped_content\n$system_prompt" | llm --no-stream "${args[@]}")
+  response=$(echo -e "$system_prompt\n\n$piped_content\n\n$system_prompt" | llm --no-stream "${args[@]}")
 
   if [ "$raw" = true ]; then
     echo "$response"
     return
   fi
   shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```bash"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')" 
+  # check if shelllm_commands is empty check for ```zsh
+  if [[ -z "$shelllm_commands" ]]; then
+    shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```zsh"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')"
+  fi
+  # check if shelllm_commands is empty check for first code block
+  if [[ -z "$shelllm_commands" ]]; then
+    shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')"
+  fi
   if [ "$thinking_level" != "none" ]; then
     thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
   fi
   print -r -z "$shelllm_commands"
 }
+
 
 
 commit_generator() {
@@ -700,73 +703,415 @@ structured_chain_of_thought() {
 llm_smell_detector() {
   SYSTEM_PROMPT=$(cat "$script_dir/prompts/LLM_SMELL.md")
 
-local args=()
-local raw=false
-local piped_content=""
+  local args=()
+  local raw=false
+  local piped_content=""
 
-# Check for piped input
-if [ ! -t 0 ]; then
-  piped_content=$(cat)
-fi
-
-# Process arguments
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --raw)
-      raw=true
-      ;;
-    *)
-      args+=("$1")
-      ;;
-  esac
-  shift
-done
-
-# If no piped content, use first argument as input file
-if [[ -z "$piped_content" && ${#args[@]} -gt 0 && -f "${args[0]}" ]]; then
-  piped_content=$(cat "${args[0]}")
-  unset 'args[0]'
-elif [[ -z "$piped_content" && ${#args[@]} -gt 0 ]]; then
-  piped_content="${args[*]}"
-  args=()
-fi
-
-if [[ -z "$piped_content" ]]; then
-  echo "Error: No LLM output provided (pipe input or pass a file/argument)" >&2
-  return 1
-fi
-
-response=$(echo -e "$piped_content" | llm -s "$SYSTEM_PROMPT" --no-stream "${args[@]}")
-
-if [ "$raw" = true ]; then
-  echo "$response"
-  return
-fi
-
-# Extract and pretty-print smells
-smells="$(echo "$response" | awk 'BEGIN{RS="<item>"} NR>1 {print "<item>"$0}' | sed 's/<\/smells>//g')"
-if [[ -z "$smells" ]]; then
-  echo "$response"
-  return
-fi
-
-count=1
-echo -e "\033[1;36mDetected LLM Smells:\033[0m"
-while IFS= read -r item; do
-  smell=$(echo "$item" | awk 'BEGIN{RS="<smell>"} NR==2' | awk 'BEGIN{RS="</smell>"} NR==1')
-  evidence=$(echo "$item" | awk 'BEGIN{RS="<evidence>"} NR==2' | awk 'BEGIN{RS="</evidence>"} NR==1')
-  explanation=$(echo "$item" | awk 'BEGIN{RS="<explanation>"} NR==2' | awk 'BEGIN{RS="</explanation>"} NR==1')
-  suggestion=$(echo "$item" | awk 'BEGIN{RS="<suggestion>"} NR==2' | awk 'BEGIN{RS="</suggestion>"} NR==1')
-  echo -e "\n\033[1;33m$count. $smell\033[0m"
-  if [[ -n "$evidence" ]]; then
-    echo -e "  \033[1;34mEvidence:\033[0m $evidence"
+  # Check for piped input
+  if [ ! -t 0 ]; then
+    piped_content=$(cat)
   fi
-  if [[ -n "$explanation" ]]; then
-    echo -e "  \033[1;32mExplanation:\033[0m $explanation"
+
+  # Process arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --raw)
+        raw=true
+        ;;
+      *)
+        args+=("$1")
+        ;;
+    esac
+    shift
+  done
+
+  # If no piped content, use first argument as input file
+  if [[ -z "$piped_content" && ${#args[@]} -gt 0 && -f "${args[0]}" ]]; then
+    piped_content=$(cat "${args[0]}")
+    args=("${args[@]:1}")
+  elif [[ -z "$piped_content" && ${#args[@]} -gt 0 ]]; then
+    piped_content="${args[*]}"
+    args=()
   fi
-  if [[ -n "$suggestion" ]]; then
-    echo -e "  \033[1;35mSuggestion:\033[0m $suggestion"
+
+  if [[ -z "$piped_content" ]]; then
+    echo "Error: No LLM output provided (pipe input or pass a file/argument)" >&2
+    return 1
   fi
-  ((count++))
-done <<< "$smells"
+
+  response=$(echo -e "$piped_content" | llm -s "$SYSTEM_PROMPT" --no-stream "${args[@]}")
+
+  if [ "$raw" = true ]; then
+    echo "$response"
+    return
+  fi
+
+  # --- Robust XML Parsing ---
+  # Extract content within <smells>...</smells>
+  smells_content=$(echo "$response" | awk '/<smells>/,/<\/smells>/' | sed '1d;$d')
+
+  if [[ -z "$(echo "$smells_content" | tr -d '[:space:]')" ]]; then
+    echo "Warning: Could not extract valid <smells> content from the response." >&2
+    echo "--- Raw LLM Response ---"
+    echo "$response"
+    echo "------------------------"
+    return 1
+  fi
+
+  count=1
+  items_found=0
+  echo -e "\033[1;36mDetected LLM Smells:\033[0m"
+
+  # Split by </item>, clean up, and extract fields
+  echo "$smells_content" | awk 'BEGIN{RS="</item>"; FS="\n"} /<item>/ {gsub(/^[[:space:]]*<item>[[:space:]]*/,""); print $0}' | while IFS= read -r item_block; do
+    if [[ -z "$(echo "$item_block" | tr -d '[:space:]')" ]]; then
+      continue
+    fi
+
+    smell=$(echo "$item_block" | awk -F'<smell>|</smell>' 'NF>1{print $2}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    evidence=$(echo "$item_block" | awk -F'<evidence>|</evidence>' 'NF>1{print $2}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    explanation=$(echo "$item_block" | awk -F'<explanation>|</explanation>' 'NF>1{print $2}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    suggestion=$(echo "$item_block" | awk -F'<suggestion>|</suggestion>' 'NF>1{print $2}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    if [[ -z "$smell" ]]; then
+      echo "Warning: Skipping malformed item block."
+      continue
+    fi
+
+    items_found=1
+
+    echo -e "\n\033[1;33m$count. $smell\033[0m"
+    if [[ -n "$evidence" ]]; then
+      echo -e "  \033[1;34mEvidence:\033[0m $evidence"
+    fi
+    if [[ -n "$explanation" ]]; then
+      echo -e "  \033[1;32mExplanation:\033[0m $explanation"
+    fi
+    if [[ -n "$suggestion" ]]; then
+      echo -e "  \033[1;35mSuggestion:\033[0m $suggestion"
+    fi
+    ((count++))
+  done
+
+  if [[ $items_found -eq 0 ]]; then
+    echo "No smells detected, or failed to parse items within the <smells> block."
+  fi
 }
+
+
+
+
+bash_script_generator() {
+  if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    echo "Usage: bash_script_generator <description> [options]"
+    echo "       cat description.txt | bash_script_generator [options]"
+    echo ""
+    echo "Options:"
+    echo "  --thinking=LEVEL     Set thinking level (none|minimal|moderate|detailed|comprehensive)"
+    echo "  --save[=FILENAME]    Save script to file (prompts if filename not given)"
+    echo "  --auto-save[=FILE]   Automatically save script (default: script.sh if not specified)"
+    echo "  --posix              Generate POSIX-compliant shell script (#/bin/sh)"
+    echo "  --advanced           Request advanced features (error handling, logging etc.)"
+    echo "  --preview            Preview script without saving (outputs to stderr)"
+    echo "  -m, --model NAME     Specify which LLM model to use"
+    echo "  -n, --note TEXT      Add additional instructions or context"
+    echo "  --raw                Output raw LLM response without processing"
+    echo "  -h, --help           Show this help message"
+    return 0
+  fi
+
+  local system_prompt="You are a bash script generator specializing in creating well-structured, robust shell scripts.
+
+For any given description, you'll create a complete bash script following these best practices:
+- Always include proper shebang (#!/bin/bash or #!/bin/sh for POSIX)
+- Add helpful comments explaining code functionality
+- Implement proper error handling (set -eo pipefail where appropriate) and input validation
+- Use meaningful variable names with consistent naming conventions
+- Follow defensive programming practices
+- Include proper command-line argument parsing with help text if appropriate
+- Add comprehensive usage documentation and examples
+- Break complex functionality into well-named functions
+- Use 'local' for variables inside functions
+- Properly quote variables and handle special characters
+- Include useful logging and debug capabilities when appropriate (--advanced)
+- Consider security implications (avoid command injection, use mktemp for temp files)
+
+Your script must be directly usable, thoroughly commented, and handle edge cases gracefully.
+Format your response with the script inside markdown code blocks: \`\`\`bash ... \`\`\`"
+
+  local thinking_level="none"
+  local llm_args=()
+  local script_desc=()
+  local user_input=""
+  local additional_note=""
+  local raw=false
+  local posix=false
+  local advanced=false
+  local preview=false
+  local save_flag=false
+  local auto_save=false
+  local save_filename=""
+
+  # Check if input is being piped
+  if [ ! -t 0 ]; then
+    user_input=$(cat)
+  fi
+
+  # Process arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --think|--thinking=*)
+        if [[ "$1" == "--think" ]]; then
+          thinking_level="moderate" # Default thinking level for --think
+        else
+          thinking_level=${1#*=}
+        fi
+        if [[ ! "$thinking_level" =~ ^(none|minimal|moderate|detailed|comprehensive)$ ]]; then
+          echo "Error: Invalid thinking level '$thinking_level'. Must be none, minimal, moderate, detailed, or comprehensive." >&2
+          return 1
+        fi
+        ;;
+      -n|--note)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          additional_note="$2"
+          shift
+        else
+          echo "Error: -n/--note requires additional text" >&2
+          return 1
+        fi
+        ;;
+      --raw)
+        raw=true
+        ;;
+      --posix)
+        posix=true
+        system_prompt+=$'\n<constraint>Create a POSIX-compliant shell script (#/bin/sh shebang) that runs on most Unix-like systems.</constraint>'
+        ;;
+      --advanced)
+        advanced=true
+        system_prompt+=$'\n<constraint>Create an advanced script with comprehensive error handling, detailed logging, command-line options, and robust validation.</constraint>'
+        ;;
+      --preview)
+        preview=true
+        ;;
+      --save*)
+        save_flag=true
+        if [[ "$1" == *=* ]]; then
+            save_filename="${1#*=}"
+        # Check if next arg is a filename (doesn't start with -), handles --save filename
+        elif [[ -n "$2" && ! "$2" =~ ^- ]]; then
+            save_filename="$2"
+            shift
+        fi
+        ;;
+     --auto-save*)
+        auto_save=true
+        if [[ "$1" == *=* ]]; then
+            save_filename="${1#*=}"
+        # Check if next arg is a filename, handles --auto-save filename
+        elif [[ -n "$2" && ! "$2" =~ ^- ]]; then
+            save_filename="$2"
+            shift
+        fi
+        save_filename="${save_filename:-script.sh}" # Default filename for auto-save
+        ;;
+      -m|--model)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          llm_args+=("-m" "$2")
+          shift
+        else
+          echo "Error: -m/--model requires a model name" >&2
+          return 1
+        fi
+        ;;
+      *)
+        # If no piped content yet, assume it's part of the description
+        if [[ -z "$user_input" ]]; then
+          script_desc+=("$1")
+        # Otherwise, pass unrecognized args to llm
+        else
+          llm_args+=("$1")
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  # If no piped input, build description from command-line arguments
+  if [[ -z "$user_input" && ${#script_desc[@]} -gt 0 ]]; then
+    user_input="${script_desc[*]}"
+  fi
+
+  # Combine description with additional notes if provided
+  if [[ -n "$additional_note" ]]; then
+      if [[ -n "$user_input" ]]; then
+        user_input+=$'\n\nAdditional instructions:\n'"$additional_note"
+      else
+        user_input="$additional_note" # Use note as input if nothing else provided
+      fi
+  fi
+
+  # Ensure we have some input description
+  if [[ -z "$user_input" ]]; then
+    echo "Error: No script description provided." >&2
+    echo "Usage: bash_script_generator <description> [options]" >&2
+    echo "       cat description.txt | bash_script_generator [options]" >&2
+    echo "       Use --help for more information" >&2
+    return 1
+  fi
+
+  # Apply structured reasoning if thinking is enabled
+  if [[ "$thinking_level" != "none" ]]; then
+    echo "Analyzing requirements and planning script structure (Level: $thinking_level)..." >&2
+    reasoning=$(echo -e "$user_input" | structured_chain_of_thought --raw "${llm_args[@]}")
+    local cot_status=$?
+    if [[ $cot_status -ne 0 ]]; then
+      echo "Error: Failed to generate reasoning (exit code: $cot_status)" >&2
+      # Decide whether to proceed without reasoning or exit
+      # return 1
+      echo "Warning: Proceeding without reasoning analysis." >&2
+    elif [[ -n "$reasoning" ]]; then
+      system_prompt+=$'\n\n<thinking>\n'"$reasoning"$'\n</thinking>'
+      echo "Reasoning analyzed successfully." >&2
+    else
+      echo "Warning: Reasoning process produced no output for level '$thinking_level'." >&2
+    fi
+  fi
+
+  # Prepare system prompt with proper tags
+  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
+
+  # Call LLM to generate the script
+  echo "Generating script..." >&2
+  response=$(echo -e "$user_input" | llm -s "$system_prompt" --no-stream "${llm_args[@]}")
+  local llm_status=$?
+  if [[ $llm_status -ne 0 ]]; then
+    echo "Error: LLM command failed (exit code: $llm_status)" >&2
+    return 1
+  fi
+  echo "Script generation complete." >&2
+
+  # Return raw response if requested
+  if [ "$raw" = true ]; then
+    echo "$response"
+    return 0
+  fi
+
+  # Extract script using awk (simpler approach)
+  # Extracts content between ```bash, ```sh, ```shell, or ``` and ```
+  echo "Extracting script from response..." >&2
+  script=""
+  for lang in bash sh shell ''; do
+      # Use awk to find the block delimited by ```[lang] ... ```
+      # Uses a flag 'p' to print lines within the block.
+      script=$(echo "$response" | awk -v lang="$lang" '
+          BEGIN { p=0 }
+          $0 ~ "^```" lang { if (p==0) {p=1; next} else {p=0} }
+          p==1 { print }
+      ')
+      [[ -n "$script" ]] && break # Stop if script found
+  done
+
+  # If no code blocks found, show warning and raw response (or optionally return the whole response)
+  if [[ -z "$script" ]]; then
+    echo "Warning: Could not extract script from markdown code blocks." >&2
+    echo "Raw LLM response:" >&2
+    echo "--------------------------------------------------------" >&2
+    echo "$response" >&2
+    echo "--------------------------------------------------------" >&2
+    # Optionally return the raw response if no blocks found:
+    # echo "$response"
+    # return 0
+    return 1 # Indicate failure to extract
+  fi
+
+  # Clean up the script (remove leading/trailing whitespace) - keep empty lines for structure
+  script="$(echo "$script" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  echo "Script extracted successfully." >&2
+
+  # Display script with formatting if in preview mode
+  if [ "$preview" = true ]; then
+    echo -e "\n\033[1;36m# Generated Script (Preview Mode)\033[0m" >&2
+    echo "--------------------------------------------------------" >&2
+    echo "$script" >&2
+    echo "--------------------------------------------------------" >&2
+    return 0
+  fi
+
+  # Handle auto-save option
+  if [ "$auto_save" = true ]; then
+    # Add .sh extension if not already present
+    [[ ! "$save_filename" == *.sh ]] && save_filename="${save_filename}.sh"
+
+    echo "Auto-saving script to '$save_filename'..." >&2
+    echo "$script" > "$save_filename"
+    local save_status=$?
+    if [[ $save_status -ne 0 ]]; then
+      echo "Error: Failed to auto-save script to '$save_filename'" >&2
+      # Output script to stdout as fallback?
+      echo "$script"
+      return 1
+    fi
+
+    chmod +x "$save_filename"
+    echo -e "\033[1;32mScript auto-saved to $save_filename and made executable\033[0m" >&2
+    return 0
+  fi
+
+ # Handle save with prompt option
+  if [ "$save_flag" = true ]; then
+    # Prompt for filename if not provided via command line
+    if [[ -z "$save_filename" ]]; then
+      echo -e "\n\033[1;33mEnter filename to save script (default: script.sh):\033[0m " >&2
+      read -r reply_filename </dev/tty # Read directly from terminal
+      save_filename=${reply_filename:-script.sh}
+    fi
+
+    # Add .sh extension if not already present
+    [[ ! "$save_filename" == *.sh ]] && save_filename="${save_filename}.sh"
+
+    # Check if file exists and prompt for overwrite
+    if [[ -f "$save_filename" ]]; then
+      echo -e "\033[1;31mWarning: File '$save_filename' already exists.\033[0m" >&2
+      echo -e "\033[1;33mOverwrite? (y/n):\033[0m " >&2
+      read -r overwrite </dev/tty
+
+      if [[ ! "$overwrite" =~ ^[Yy] ]]; then
+        echo "Operation cancelled. Script not saved." >&2
+        # Output script to stdout as fallback?
+        echo "$script"
+        return 0
+      fi
+    fi
+
+    # Save to file
+    echo "Saving script to '$save_filename'..." >&2
+    echo "$script" > "$save_filename"
+    local save_status=$?
+    if [[ $save_status -ne 0 ]]; then
+      echo "Error: Failed to save script to '$save_filename'" >&2
+      # Output script to stdout as fallback?
+      echo "$script"
+      return 1
+    fi
+
+    chmod +x "$save_filename"
+    echo -e "\033[1;32mScript saved to $save_filename and made executable\033[0m" >&2
+
+    # Offer to open in editor
+    echo -e "\033[1;33mOpen in editor? (y/n):\033[0m " >&2
+    read -r edit_response </dev/tty
+
+    if [[ "$edit_response" =~ ^[Yy] ]]; then
+      ${EDITOR:-vi} "$save_filename" </dev/tty
+    fi
+    return 0
+  fi
+
+  # Default behavior: Output script to stdout
+  echo "$script"
+
+}
+
+# Add alias for ease of use
+alias genscript=bash_script_generator
