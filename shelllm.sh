@@ -463,119 +463,110 @@ taste++() {
   # Rewrites the prompt to improve the perceived taste and education level of the LLM.
   # Usage: taste++ <prompt> [--think] [-m MODEL_NAME]
   #        cat prompt.txt | taste++ [--think] [-m MODEL_NAME]
-  local system_prompt="Assume, with judicious discernment and the requisite intellectual gravitas, the exalted role of an arbiter possessing consummate mastery over linguistic sophistication and erudite exposition. Your distinguished mandate is to metamorphose the proffered prompt, imbuing it with superlative scholarly refinement, rhetorical éclat, and an augmented aura of academic perspicacity, all the while preserving, with unwavering exactitude, its essential purport and original objectives.
+  local system_prompt=$(cat "$script_dir/prompts/taste++.md")
 
-Accordingly, adhere to the following elevated protocol, articulated with due regard for cultivated precision:
-1. Conduct a meticulous autopsy of the source prompt, interrogating its tonal register, stylistic idiosyncrasies, and the subtleties of its expressive architecture.
-2. Elucidate those junctures wherein advancements in vocabulary, syntactical arrangement, or compositional design might bestow additional intellectual luster and augment its standing within the pantheon of academic discourse.
-3. Reconstitute the prompt, deftly interweaving a luxuriant and rarefied lexicon, syntactic sophistication of the highest order, and rhetorically enriched stylistic embellishments apt for the most discerning scholarly audience.
-4. Insist, with scrupulous vigilance, that your reconceptualized rendering maintains unassailable fidelity to the foundational intent and semantic substance of the original, ensuring that the prompt’s essential mandate is rendered inviolate.
+  local thinking_enabled=false # Changed from thinking_level
+  local args=()
+  local model=""
+  local raw=false
+  local piped_content=""
+  local user_prompt=""
 
-Present your refined response in strict accord with the XML schema appended herewith.
-<analysis>Your analysis of the original prompt's strengths and weaknesses</analysis>
-<refined_prompt>Your refined version of the prompt</refined_prompt>"
-local thinking_enabled=false # Changed from thinking_level
-local args=()
-local model=""
-local raw=false
-local piped_content=""
-local user_prompt=""
+  # Check if input is being piped
+  if [ ! -t 0 ]; then
+    piped_content=$(cat)
+    user_prompt="$piped_content"
+  fi
 
-# Check if input is being piped
-if [ ! -t 0 ]; then
-  piped_content=$(cat)
-  user_prompt="$piped_content"
-fi
+  # Process arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --think) # Changed from --thinking=*
+        thinking_enabled=true # Set boolean flag
+        ;;
+      --raw)
+        raw=true
+        ;;
+      -m)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          args+=("$1" "$2") # Add -m and its value
+          shift 2 # Consume both arguments
+          continue # Skip the final shift
+        else
+          echo "Error: $1 requires a model name" >&2
+          return 1
+        fi
+        ;;
+      *)
+        # If not piped, collect arguments as the prompt
+        if [[ -z "$piped_content" ]]; then
+          args+=("$1")
+        else
+          # If piped, remaining args are for llm
+          args+=("$1")
+        fi
+        ;;
+    esac
+    shift
+  done
 
-# Process arguments
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --think) # Changed from --thinking=*
-      thinking_enabled=true # Set boolean flag
-      ;;
-    --raw)
-      raw=true
-      ;;
-    -m)
-      if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-        args+=("$1" "$2") # Add -m and its value
-        shift 2 # Consume both arguments
-        continue # Skip the final shift
-      else
-        echo "Error: $1 requires a model name" >&2
-        return 1
+  # If not piped, construct user_prompt from collected args
+  if [[ -z "$piped_content" ]]; then
+      if [[ ${#args[@]} -eq 0 ]]; then
+          echo "Error: No prompt provided." >&2
+          echo "Usage: taste++ <prompt> [options]" >&2
+          echo "       cat prompt.txt | taste++ [options]" >&2
+          return 1
       fi
-      ;;
-    *)
-      # If not piped, collect arguments as the prompt
-      if [[ -z "$piped_content" ]]; then
-        args+=("$1")
-      else
-        # If piped, remaining args are for llm
-        args+=("$1")
-      fi
-      ;;
-  esac
-  shift
-done
+      user_prompt="${args[*]}"
+      args=() # Reset args if they were used for the prompt itself
+  fi
 
-# If not piped, construct user_prompt from collected args
-if [[ -z "$piped_content" ]]; then
-    if [[ ${#args[@]} -eq 0 ]]; then
-        echo "Error: No prompt provided." >&2
-        echo "Usage: taste++ <prompt> [options]" >&2
-        echo "       cat prompt.txt | taste++ [options]" >&2
-        return 1
+
+  if [ "$thinking_enabled" = true ]; then # Changed condition
+    # Pass a default thinking level to structured_chain_of_thought if needed
+    reasoning=$(echo -e "$user_prompt" | structured_chain_of_thought --thinking=moderate --raw "${args[@]}")
+    if [[ -n "$reasoning" ]]; then
+      system_prompt+="<thinking>$reasoning</thinking>"
+    else
+      echo "Error: No reasoning provided" >&2
+      return 1
     fi
-    user_prompt="${args[*]}"
-    args=() # Reset args if they were used for the prompt itself
-fi
-
-
-if [ "$thinking_enabled" = true ]; then # Changed condition
-  # Pass a default thinking level to structured_chain_of_thought if needed
-  reasoning=$(echo -e "$user_prompt" | structured_chain_of_thought --thinking=moderate --raw "${args[@]}")
-  if [[ -n "$reasoning" ]]; then
-    system_prompt+="<thinking>$reasoning</thinking>"
-  else
-    echo "Error: No reasoning provided" >&2
-    return 1
   fi
-fi
 
-system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
-# Call LLM
-response=$(echo -e "$user_prompt" | llm -s "$system_prompt" --no-stream "${args[@]}")
+  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
+  # Call LLM
+  response=$(echo -e "$user_prompt" | llm -s "$system_prompt" --no-stream "${args[@]}")
 
-# Return raw response if requested
-if [ "$raw" = true ]; then
-  echo "$response"
-  return
-fi
-
-# Extract sections
-analysis="$(echo "$response" | awk 'BEGIN{RS="<analysis>"} NR==2' | awk 'BEGIN{RS="</analysis>"} NR==1')"
-refined_prompt="$(echo "$response" | awk 'BEGIN{RS="<refined_prompt>"} NR==2' | awk 'BEGIN{RS="</refined_prompt>"} NR==1')"
-
-# Display formatted output
-if [ "$thinking_enabled" = true ]; then # Changed condition
-  thinking="$(echo "$response" | awk 'BEGIN{RS="<thinking>"} NR==2' | awk 'BEGIN{RS="</thinking>"} NR==1')"
-  if [[ -n "$thinking" ]]; then
-    echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking\n"
-  fi
-fi
-
-if [[ -z "$analysis" && -z "$refined_prompt" ]]; then
-    echo "Warning: Could not extract analysis or refined prompt. Displaying raw response:" >&2
+  # Return raw response if requested
+  if [ "$raw" = true ]; then
     echo "$response"
-    return 1
-fi
+    return
+  fi
 
-if [[ -n "$analysis" ]]; then
-  echo -e "\033[1;36mANALYSIS:\033[0m\n$analysis\n"
-fi
-if [[ -n "$refined_prompt" ]]; then
-  echo -e "\033[1;32mREFINED PROMPT:\033[0m\n$refined_prompt"
+  # Extract sections
+  analysis="$(echo "$response" | awk 'BEGIN{RS="<analysis>"} NR==2' | awk 'BEGIN{RS="</analysis>"} NR==1')"
+  refined_prompt="$(echo "$response" | awk 'BEGIN{RS="<refined_prompt>"} NR==2' | awk 'BEGIN{RS="</refined_prompt>"} NR==1')"
+
+  # Display formatted output
+  if [ "$thinking_enabled" = true ]; then # Changed condition
+    thinking="$(echo "$response" | awk 'BEGIN{RS="<thinking>"} NR==2' | awk 'BEGIN{RS="</thinking>"} NR==1')"
+    if [[ -n "$thinking" ]]; then
+      echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking\n"
+    fi
+  fi
+
+  if [[ -z "$analysis" && -z "$refined_prompt" ]]; then
+      echo "Warning: Could not extract analysis or refined prompt. Displaying raw response:" >&2
+      echo "$response"
+      return 1
+  fi
+
+  if [[ -n "$analysis" ]]; then
+    echo -e "\033[1;36mANALYSIS:\033[0m\n$analysis\n"
+  fi
+  if [[ -n "$refined_prompt" ]]; then
+    echo -e "\033[1;32mREFINED PROMPT:\033[0m\n$refined_prompt"
 fi
 }
 
