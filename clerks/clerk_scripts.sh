@@ -105,7 +105,7 @@ note_llm_plugins () {
 <CORE_FUNCTION>I will give you notes as I think of them. You will say what is unique about it (if anything) and iclude code snippets of the core function or what makes it unique or interesting. This is to help me learn about the llm cli and python library and plugins. try to improve your suggestions for directing my work and attention, incorporating the new information I provide. You should structure each response like <feedback>This should be your own critical and intelligent thoughts on what I am saying, but VERY brief</feedback>
 Also important, if you notice any MAJOR and OBVIOUS ineficience, mention them. Like if a model plugin is polling an api for a list every time it loads etc. Or say nothing.
 Dont say anything else.
-Dont mention obvious common or repetitve issues, like generic security risks and error handling.
+Dont mention obvious, common or repetitve issues, like generic security risks and error handling.
 Only mention that which is unqine about the plugin code. If nothing is unique, a single short paragraph should be written.
 </CORE_FUNCTION>
 Keep your answers extremely short. I will ask you to expand if I desire.
