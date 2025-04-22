@@ -3,6 +3,7 @@ llm_notes_cid=01jkkcyfzhpcs7aax3nc6yjpjc
 compressor_cid=01jmyx7v4peds998rpwbkm7r2n
 llm_plugins_cid=01jkr7k1kad267qakefh2hb63a
 clerk_cid=01jfgh2pg75nkg9brb146mj8vm
+note_today_cid=01jsesr22sqxchsqwspvqj2akx 
 
 deep-bloom () {
     local stdin_data=""
@@ -116,7 +117,6 @@ Always Include code snippets if the code provided contains anything we havent se
 
 note_today() {
     # Tasks for today
-    today_cid=01jsesr22sqxchsqwspvqj2akx
     local stdin_data=""
     local args_to_pass=()
 
@@ -133,7 +133,7 @@ note_today() {
     llm --system "<MACHINE_NAME>Daily Task Manager</MACHINE_NAME>
 <MACHINE_DESCRIPTION>Manages daily tasks and priorities.</MACHINE_DESCRIPTION>
 <CORE_FUNCTION>I will provide updates on my tasks for today. You will help me prioritize, track progress, and suggest next steps. Keep track of completed tasks and upcoming deadlines. Provide concise summaries and reminders.</CORE_FUNCTION>
-Keep responses brief and focused on actionable items." -c --cid $today_cid "${args_to_pass[@]}" 
+Keep responses brief and focused on actionable items." -c --cid $note_today_cid "${args_to_pass[@]}" 
 }
 
 

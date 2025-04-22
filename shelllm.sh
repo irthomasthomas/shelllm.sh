@@ -130,7 +130,8 @@ shelp() {
   # Generate a shell command based on user input.
   # Usage: shelp <command description> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME]
   #        cat file.txt | shelp [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME]
-  local system_prompt="write as many shell terminal commands as needed to accomplish the task described in the user input. The command will be run directly in the zsh terminal so code comments are not allowed. The command should be practical and effective, with a technical tone. code should be formatted in a code block, e.g.: \`\`\`bash"
+  local info="$(uname -a)"
+  local system_prompt="$info\n\nwrite as many shell terminal commands as needed to accomplish the task described in the user input. The command will be run directly in the zsh terminal so code comments are not allowed. The command should be practical and effective, with a technical tone. code should be formatted in a code block, e.g.: \`\`\`bash"
   local thinking_level="none"
   local args=()
   local model=""
