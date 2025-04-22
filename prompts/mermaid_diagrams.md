@@ -324,19 +324,76 @@ graph TD
     %% Reason: Difficult to maintain and test
 ```
 
-### Example: State Diagram with Code Smells
-
 ```mermaid
-stateDiagram-v2
-    [*] --> Idle
-    Idle --> Processing : start()
-    Processing --> Idle : stop()
-    Processing --> Error : fail()
-    Error --> [*]
+graph TD
+    A[Start] --> B(Agent Init<br>`.agent` dir, `.git`, `.gitignore`)
+    B --> C(Load Config/Prompts<br>Hardcoded paths)
+    C --> D[Main Execution Loop<br><sub>(God Function / Spaghetti Code, Complex State Management)</sub>]:::spaghetti
+    D -- Parses<br>Args --> D1(Arg Parsing<br><sub>(adhoc logic)</sub>)
 
-    %% Highlighting code smells
-    state Processing {
-        %% Code Smell: Long Method
-        %% Reason: Too many transitions
-    }
+    D{Loop Iteration}:::cyclic
+    D1 --> D
+
+    D --> E(Prepare Prompt<br><sub>(Adds Context, Reasoning, Memories)</sub>)
+    E -- Includes Gathered --> F(Gather Context<br><sub>(Heavy Filesystem/Network I/O)</sub>):::expensive_i_o
+    F --> F1(<font color='navy'>Calls External Tools</font><br><sub>(find, xargs, web_researcher, sqlite)</sub>):::external_dependency
+    F1 --> F
+    F --> F2(<font color='navy'>Calls LLM</font><br><sub>(for context analysis/summaries)</sub>):::external_dependency
+    F2 --> F
+    E -- Includes Reasoning --> G(Get Reasoning Assistance<br><sub>(Complex Model Selection, Temp Files, Multi-LLM Calls)</sub>):::complex_decision
+    G -- Calls LLM --> G1(<font color='navy'>Calls LLM</font><br><sub>(for Reasoning/Prompt Opt)</sub>):::external_dependency
+
+    E -- Final Prompt --> H(Call LLM<br><sub>(with Retry Logic)</sub>)
+    H -- Calls LLM --> H1(<font color='navy'>Calls LLM</font><br><sub>(Main Task Model)</sub>):::external_dependency
+    H1 -- Response --> I(Raw LLM Response<br><sub>(Text from API)</sub>)
+
+
+    I --> J(Parse Agent Response<br><sub>(Fragile Tag Parsing)</sub>):::brittleness
+    J -- Extract COMMAND --> K(Execute Command<br><sub>(Dangerous EVAL!)</sub>):::eval_risk
+    K --> K1(<font color='red'>Runs Shell Command</font><br><sub>(Eval is a CRITICAL RISK)</sub>):::eval_risk_component
+    K1 -- Output --> K
+    K -- Optional HIL --> K2(task_ask_user<br><sub>(GUI/CLI Input)</sub>):::hil
+
+    J -- Extract WRITE_FILES --> L(Write Files<br><sub>(Uses Python Helper)</sub>):::external_dependency
+    L --> L1(<font color='orange'>Python Helper</font><br><sub>(Stdin/Stdout Interface, Basic Path Sanitization)</sub>):::python_helper
+    L1 --> M(Filesystem I/O<br><sub>(Reads/Writes Files, Temp Files)</sub>)
+    L --> M
+
+    J -- Extract MEMORY --> N(Add Memory<br><sub>(Appends to File)</sub>)
+    N --> M
+
+    J -- Extract FINAL_ANSWER --> P{Task Completed?}
+    P -- Yes --> Q[End]
+    P -- No --> D
+
+    K -- Command Output/Feedback --> R(Process Execution Feedback<br><sub>(LLM Classification)</sub>):::brittle_llm_classify
+    L -- Write Feedback --> R
+    N -- Memory Feedback --> R
+    R -- Calls LLM --> R1(<font color='navy'>Calls LLM</font><br><sub>(for Feedback Classification)</sub>):::external_dependency
+
+    R -- Updates Log --> S(SQLite Log DB<br><sub>(Direct Update for Compression - Risky)</sub>):::insecure_db
+
+    R -- Feedback --> D
+
+    subgraph Problematic Areas
+        brittle_llm_classify[LLM Feedback Classification brittleness]
+        insecure_db[Direct SQLite DB Update vulnerability]
+        python_helper[Python Helper Complexity/Interface]
+        eval_risk_component[Shell Command with EVAL critical risk]
+    end
+
+    classDef spaghetti fill:#ffcccb,stroke:#d32f2f,stroke-width:2px,font-weight:bold;
+    classDef eval_risk fill:#ef9a9a,stroke:#c62828,stroke-width:2px,font-weight:bold;
+     classDef eval_risk_component fill:#e57373,stroke:#c62828,stroke-width:2px,font-weight:bold;
+    classDef brittleness fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
+    classDef external_dependency fill:#e0f2f7,stroke:#4fc3f7;
+    classDef expensive_i_o fill:#f3e5f5,stroke:#ab47bc;
+    classDef complex_decision fill:#c8e6c9,stroke:#66bb6a;
+    classDef cyclic stroke:#ffccbc,stroke-width:2px;
+    classDef insecure_db fill:#ffab91,stroke:#e64a19,stroke-width:2px;
+    classDef brittle_llm_classify fill:#fff59d,stroke:#fbc02d,stroke-width:2px;
+    classDef python_helper fill:#b2ebf2,stroke:#00bcd4;
+    classDef hil fill:#dcedc8,stroke:#8bc34a;
+
+
 ```
