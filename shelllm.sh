@@ -25,6 +25,17 @@ source "$script_dir/search_engineer.sh"
 source "$script_dir/code_refactor.sh"
 cd "$original_dir"
 
+bash_command() {
+  local system_prompt="$(which bash_command)"
+  echo "$system_prompt"
+  local raw_cmd=""
+  # forward all args to llm
+  raw_cmd="$(llm -s "$system_prompt" --no-stream "${args[@]}")"
+  echo "$raw_cmd"
+  # extract content between ```bash
+  echo "$raw_cmd" | awk 'BEGIN{RS="```bash"} NR==2' | awk 'BEGIN{RS="```"} NR==1' | sed '/^ *#/d;/^$/d'
+}
+
 task_plan_generator() {
   # Generates a task plan based on user input.
   # Usage: task_plan_generator <task description> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--note=NOTE|-n NOTE]
