@@ -137,7 +137,7 @@ shelp() {
   local model=""
   local raw=false
 
-  if [ ! -t 0 ]; then
+  if [ ! -t 0 ]; then #
     local piped_content
     piped_content=$(cat)
   fi
@@ -1288,3 +1288,121 @@ Format your response with the script inside markdown code blocks: \`\`\`bash ...
 # Add alias for ease of use
 alias genscript=bash_script_generator
 
+mermaid_charts() {
+  # Generates mermaid charts from a description in markdown.
+  # Usage: mermaid_charts <description> [options]
+  #        cat description.txt | mermaid_charts [options]
+  # Options:
+  #   --think=FALSE|TRUE  Enable COT reasoning process
+  #   --output-thinking=TRUE|FALSE  Output reasoning process
+  #   -m MODEL_NAME          Specify which LLM model to use
+  #   --raw                  Return the raw LLM response
+
+  
+  local system_prompt="You are a diagram generator that creates mermaid charts from a description. Follow these steps:
+  Study the provided examples to understand the format and structure of mermaid charts.
+  Analyze the given data or description and identify the key components to represent in the chart.
+  Generate a mermaid chart in the specified format, ensuring it is clear and easy to understand.
+  Format your response with the chart inside markdown code blocks: \`\`\`mermaid ... \`\`\`"
+  local args=()
+  local raw=false
+  local piped_content=""
+  local user_prompt=""
+  local think=false
+  local output_thinking=false
+  local reasoning=""
+  local FEW_SHOT_PROMPT="$(cat "$script_dir/prompts/mermaid_diagrams.md")"
+
+  # Check if input is being piped
+  if [ ! -t 0 ]; then
+    piped_content=$(cat)
+  fi
+  # Process arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --think|--thinking=*)
+        if [[ "$1" == "--think" ]]; then
+          think=true # Default thinking level for --think
+        else
+          think=${1#*=}
+        fi
+        ;;
+      --output-thinking)
+        output_thinking=true
+        ;;
+      --raw)
+        raw=true
+        ;;
+      *)
+        # If not piped, collect arguments as the prompt
+        if [[ -z "$piped_content" ]]; then
+           args+=("$1")
+        else
+           # If piped, remaining args are for llm
+           args+=("$1")
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  # If not piped, construct user_prompt from collected args
+  user_prompt="$piped_content"
+  if [[ -z "$piped_content" ]]; then
+      if [[ ${#args[@]} -eq 0 ]]; then
+          echo "Error: No description provided." >&2
+          echo "Usage: mermaid_charts <description> [options]" >&2
+          echo "       cat description.txt | mermaid_charts [options]" >&2
+          return 1
+      fi
+      user_prompt="${args[*]}"
+      args=() # Reset args if they were used for the prompt itself
+  fi
+  # If thinking is enabled, use structured_chain_of_thought
+  if [[ "$think" = true ]]; then
+    reasoning=$(echo -e "$user_prompt" | structured_chain_of_thought --raw "${args[@]}")
+    local cot_status=$?
+    if [[ $cot_status -ne 0 ]]; then
+        echo "Error: Failed to generate reasoning (exit code: $cot_status)" >&2
+        # Optionally return or proceed without reasoning
+        return 1
+    elif [[ -n "$reasoning" ]]; then
+      system_prompt+=$'\n\n<thinking>\n'"$reasoning"$'\n</thinking>'
+    else
+      echo "Warning: Reasoning process produced no output." >&2
+      # Optionally return or proceed without reasoning
+      # return 1
+    fi
+  fi
+  # CONTSTRUCT prompt and FEW_SHOT_PROMPT to llm
+  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
+  # FEW_SHOT to user_prompt
+  user_prompt="$FEW_SHOT_PROMPT\n\n$user_prompt"
+  # Call LLM
+  response=$(echo -e "$user_prompt" | llm -s "$system_prompt" --no-stream "${args[@]}")
+  local llm_status=$?
+  if [[ $llm_status -ne 0 ]]; then
+    echo "Error: LLM command failed (exit code: $llm_status)" >&2
+    return 1
+  fi
+  if [ "$raw" = true ]; then
+    echo "$response"
+    return
+  fi
+  # Extract sections
+  chart="$(echo "$response" | awk 'BEGIN{RS="```mermaid"} NR==2' | awk 'BEGIN{RS="```"} NR==1')"
+  # check if chart is empty and if so return the raw response
+  if [[ -z "$chart" ]]; then # Check both analysis and refined prompt
+    echo "Warning: Could not extract chart. Displaying raw response:" >&2
+    echo "$response"
+    return 1 # Indicate failure
+  fi
+  
+  if [[ "$output_thinking" = true ]]; then
+    echo -e "\nThinking Process:\n$reasoning\n"
+  fi
+  echo "$chart"
+  return 0
+}
+# Add alias for ease of use
+alias mermaid=mermaid_charts

@@ -11,3 +11,9 @@ Optionally, when an agent is running, the watch on the active project should be 
 When the agent is stopped, the watcher should be resumed.
 
 There may be a pattern where monitoring the TODO.md and IDEAS.md of the active agent session is useful. For having an overview activity.
+
+
+# Glossary
+Implement an llm driven glossary to keep track of new terms and definitions discovered during the conversation.
+Some rough ideas to discuss:
+drafts/glossary.md contains some draft implementations to be adapted to specific LLM library usage.

@@ -87,6 +87,7 @@ TheCompressor takes the input from the user and rewrites it using the fewest tok
 }
 
 
+
 note_llm_plugins () {
     local stdin_data=""
     local args_to_pass=()
@@ -137,3 +138,37 @@ Keep responses brief and focused on actionable items." -c --cid $note_today_cid 
 }
 
 
+glossary_clerk() {
+    local stdin_data=""
+    local args_to_pass=()
+
+    if [ ! -t 0 ]; then
+        stdin_data=$(cat)
+    fi
+
+    if [ $# -gt 0 ]; then
+        args_to_pass=("$@")
+    elif [ -n "$stdin_data" ]; then
+        args_to_pass=("$stdin_data")
+    fi
+
+    # If no input provided, maybe list the glossary? Or prompt? For now, just pass empty.
+    # Consider adding logic here if you want specific behavior with no input.
+
+    llm "${args_to_pass[@]}" --system "<MACHINE_NAME>Glossary Clerk</MACHINE_NAME>
+<MACHINE_DESCRIPTION>Maintains a glossary of terms and their definitions.</MACHINE_DESCRIPTION>
+<CORE_FUNCTION>
+I will provide you with terms and their definitions, or ask you about existing terms.
+When I provide a new term and definition (e.g., 'Term: Definition'), record it accurately.
+If I provide just a term, try to define it based on our conversation history or ask for clarification.
+If I ask 'What is [Term]?', retrieve and provide the stored definition.
+Maintain a consistent internal format like:
+Term: [Term Name]
+Definition: [Definition provided]
+Context/Example: [Optional: Add context or examples if provided or relevant]
+Keep responses concise. Confirm additions briefly (e.g., 'Recorded: [Term]'). When retrieving, just provide the definition.
+</CORE_FUNCTION>
+" -c --cid 01jsf84h50539s9bv0zekmmydy
+}
+
+alias glossary=glossary_clerk
