@@ -17,3 +17,8 @@ There may be a pattern where monitoring the TODO.md and IDEAS.md of the active a
 Implement an llm driven glossary to keep track of new terms and definitions discovered during the conversation.
 Some rough ideas to discuss:
 drafts/glossary.md contains some draft implementations to be adapted to specific LLM library usage.
+
+
+# Token efficiency expert prompt
+Analyze scripts used by llm agents and look for dangerous patterns and inefficiencies.
+Pay special attention code that reads from files, or uses the filesystem, or untrusted input, network, etc. Suggest ways limit the risk of too many tokens being used from running the code.

@@ -73,3 +73,5 @@ If no smells are found, return:
   <suggestion>No changes needed.</suggestion>
 </item>
 </smells>
+
+Finaly, provide a refreshed output of the original text, with all detected smells removed or improved.

@@ -125,68 +125,48 @@ task_plan_generator() {
   echo "$plan"
 }
 
-
-shelp() {
-  # Generate a shell command based on user input.
-  # Usage: shelp <command description> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME]
-  #        cat file.txt | shelp [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME]
-  local info="$(uname -a)"
-  local system_prompt="$info\n\nwrite as many shell terminal commands as needed to accomplish the task described in the user input. The command will be run directly in the zsh terminal so code comments are not allowed. The command should be practical and effective, with a technical tone. code should be formatted in a code block, e.g.: \`\`\`bash"
-  local thinking_level="none"
-  local args=()
-  local model=""
+# local system_prompt="$info\n\nwrite shell terminal commands to accomplish the task beautifully. The command will be run directly in the zsh terminal so code comments are not allowed. The command should be practical and effective, with a technical tone. code should be formatted in a code block, e.g.: \`\`\`bash" 
+shelp () {
+  local info="$(uname -a)" 
+  local system_prompt="$(which shelp)\n\n$info"
+  local thinking=false 
+  local args=() 
   local raw=false
-
-  if [ ! -t 0 ]; then #
+  if [ ! -t 0 ]; then
     local piped_content
-    piped_content=$(cat)
+    piped_content=$(cat) 
   fi
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --thinking=*)
-        thinking_level=${1#*=}
-        ;;
-      --raw)
-        raw=true
-        ;;
-      *)
-        args+=("$1")
-        ;;
+      (--think) thinking=true  ;;
+      (--raw) raw=true  ;;
+      (*) args+=("$1")  ;;
     esac
     shift
   done
-  
-  if [ "$thinking_level" != "none" ]; then
-    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}")
+  if [ "$thinking" = true ]; then
+    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}") 
     if [[ -n "$reasoning" ]]; then
-      system_prompt+="<thinking>$reasoning</thinking>"
+      system_prompt+="<thinking>$reasoning</thinking>" 
     else
       echo "Error: No reasoning provided" >&2
       return 1
     fi
   fi
-  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
-
-  response=$(echo -e "$system_prompt\n\n$piped_content\n\n$system_prompt" | llm --no-stream "${args[@]}")
-
+  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n" 
+  response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}") 
   if [ "$raw" = true ]; then
     echo "$response"
     return
   fi
-  shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```bash"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')" 
-  # check if shelllm_commands is empty check for ```zsh
-  if [[ -z "$shelllm_commands" ]]; then
-    shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```zsh"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')"
-  fi
-  # check if shelllm_commands is empty check for first code block
-  if [[ -z "$shelllm_commands" ]]; then
-    shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')"
-  fi
-  if [ "$thinking_level" != "none" ]; then
-    thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
-  fi
-  print -r -z "$shelllm_commands"
+  # Extract the first code block
+  shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```zsh"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')" 
+  
+  echo "$shelllm_commands"
 }
+
+alias shelp-x='shelp_wrapper() { eval "$(shelp "$@")"; }; shelp_wrapper'
+alias shelp-e='shelp_wrapper() { print -r -z "$(shelp "$@")"; }; shelp_wrapper'
 
 
 
@@ -471,73 +451,92 @@ novel_ideas_generator() {
 # Alias for ease of use
 alias brainstorm=novel_ideas_generator
 
-taste++() {
-  # Rewrites the prompt to improve the perceived taste and education level of the LLM.
-  # Usage: taste++ <prompt> [--think] [-m MODEL_NAME]
-  #        cat prompt.txt | taste++ [--think] [-m MODEL_NAME]
-  local system_prompt=$(cat "$script_dir/prompts/taste++.md")
+taste++ () {
+  local system_prompt=$(cat "$script_dir/prompts/taste++.md") 
+  local thinking=false 
+  local args=() 
+  local raw=false 
+  if [ ! -t 0 ]
+  then
+    local piped_content
+    piped_content=$(cat) 
+  fi
+  while [[ $# -gt 0 ]];  do
+    case "$1" in
+      (--think) thinking=true  ;;
+      (--raw) raw=true  ;;
+      (*) args+=("$1")  ;;
+    esac
+    shift
+  done
+  if [ "$thinking" = true ]; then
+    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}") 
+    if [[ -n "$reasoning" ]]; then
+      system_prompt+="<notes>$reasoning</notes>" 
+    else
+      echo "Error: No reasoning provided" >&2
+      return 1
+    fi
+  fi
+  response=$(echo -e "$system_prompt\n\n$piped_content" | llm --no-stream "${args[@]}") 
+  if [ "$raw" = true ]; then
+    echo "$response"
+    return
+  fi
+  refined_text="$(echo "$response" | awk 'BEGIN{RS="<refined_text>"} NR==2' | awk 'BEGIN{RS="</refined_text>"} NR==1')" 
+  if [[ -z "$refined_text" ]]; then
+    echo "Warning: Could not extract refined prompt. Displaying raw response:" >&2
+    echo "$response"
+    return 1
+  fi
+  echo "$refined_text"
+}
 
-  local thinking_enabled=false # Changed from thinking_level
+
+prompt_engineer() {
+  # Helps craft and refine LLM prompts with suggestions for improvements.
+   local system_prompt="You are a prompt engineering expert. Your task is to analyze the given prompt and suggest improvements to make it more effective for LLMs.
+
+  Follow these steps:
+  1. Analyze the provided prompt's structure, clarity, and specificity
+  2. Identify weaknesses, ambiguities, or areas that could cause misunderstanding
+  3. Suggest specific improvements with explanations
+  4. Provide a refined version of the prompt
+
+  Format your response with these XML tags:
+  <analysis>Your analysis of the prompt's strengths and weaknesses</analysis>
+  <improvements>
+    <item>First improvement suggestion with explanation</item>
+    <item>Second improvement suggestion with explanation</item>
+    ...
+  </improvements>
+  <refined_prompt>Your improved version of the prompt</refined_prompt>"
+  local thinking_level="none"
   local args=()
   local model=""
   local raw=false
-  local piped_content=""
-  local user_prompt=""
 
-  # Check if input is being piped
-  if [ ! -t 0 ]; then
+  if [ ! -t 0 ]; then #
+    local piped_content
     piped_content=$(cat)
-    user_prompt="$piped_content"
   fi
-
-  # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --think) # Changed from --thinking=*
-        thinking_enabled=true # Set boolean flag
+      --thinking=*)
+        thinking_level=${1#*=}
         ;;
       --raw)
         raw=true
         ;;
-      -m)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          args+=("$1" "$2") # Add -m and its value
-          shift 2 # Consume both arguments
-          continue # Skip the final shift
-        else
-          echo "Error: $1 requires a model name" >&2
-          return 1
-        fi
-        ;;
       *)
-        # If not piped, collect arguments as the prompt
-        if [[ -z "$piped_content" ]]; then
-          args+=("$1")
-        else
-          # If piped, remaining args are for llm
-          args+=("$1")
-        fi
+        args+=("$1")
         ;;
     esac
     shift
   done
-
-  # If not piped, construct user_prompt from collected args
-  if [[ -z "$piped_content" ]]; then
-      if [[ ${#args[@]} -eq 0 ]]; then
-          echo "Error: No prompt provided." >&2
-          echo "Usage: taste++ <prompt> [options]" >&2
-          echo "       cat prompt.txt | taste++ [options]" >&2
-          return 1
-      fi
-      user_prompt="${args[*]}"
-      args=() # Reset args if they were used for the prompt itself
-  fi
-
-
-  if [ "$thinking_enabled" = true ]; then # Changed condition
-    # Pass a default thinking level to structured_chain_of_thought if needed
-    reasoning=$(echo -e "$user_prompt" | structured_chain_of_thought --thinking=moderate --raw "${args[@]}")
+  
+  if [ "$thinking_level" != "none" ]; then
+    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}")
     if [[ -n "$reasoning" ]]; then
       system_prompt+="<thinking>$reasoning</thinking>"
     else
@@ -545,44 +544,55 @@ taste++() {
       return 1
     fi
   fi
-
   system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
-  # Call LLM
-  response=$(echo -e "$user_prompt" | llm -s "$system_prompt" --no-stream "${args[@]}")
 
-  # Return raw response if requested
+  response=$(echo -e "$system_prompt\n\n$piped_content\n\n$system_prompt" | llm --no-stream "${args[@]}")
+
   if [ "$raw" = true ]; then
     echo "$response"
     return
   fi
-
+  if [ "$thinking_level" != "none" ]; then
+    thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
+  fi
   # Extract sections
   analysis="$(echo "$response" | awk 'BEGIN{RS="<analysis>"} NR==2' | awk 'BEGIN{RS="</analysis>"} NR==1')"
+  improvements="$(echo "$response" | awk 'BEGIN{RS="<improvements>"} NR==2' | awk 'BEGIN{RS="</improvements>"} NR==1')"
   refined_prompt="$(echo "$response" | awk 'BEGIN{RS="<refined_prompt>"} NR==2' | awk 'BEGIN{RS="</refined_prompt>"} NR==1')"
-
+  # check if analysis is empty
+  if [[ -z "$analysis" && -z "$refined_prompt" ]]; then
+    echo "Warning: Could not extract analysis or refined prompt. Displaying raw response:" >&2
+    echo "$response"
+    return 1
+  fi
   # Display formatted output
-  if [ "$thinking_enabled" = true ]; then # Changed condition
-    thinking="$(echo "$response" | awk 'BEGIN{RS="<thinking>"} NR==2' | awk 'BEGIN{RS="</thinking>"} NR==1')"
+  if [ "$thinking_level" != "none" ]; then
     if [[ -n "$thinking" ]]; then
       echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking\n"
     fi
   fi
-
-  if [[ -z "$analysis" && -z "$refined_prompt" ]]; then
-      echo "Warning: Could not extract analysis or refined prompt. Displaying raw response:" >&2
-      echo "$response"
-      return 1
-  fi
-
   if [[ -n "$analysis" ]]; then
     echo -e "\033[1;36mANALYSIS:\033[0m\n$analysis\n"
   fi
+  if [[ -n "$improvements" ]]; then
+    echo -e "\033[1;35mIMPROVEMENTS:\033[0m"
+    count=1
+    while IFS= read -r line; do
+      trimmed_line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//') # Trim leading and trailing whitespace
+      if [[ -n "$trimmed_line" ]]; then
+        echo "$count. $trimmed_line"
+        ((count++))
+      fi
+    done <<< "$improvements"
+    echo
+  fi
   if [[ -n "$refined_prompt" ]]; then
     echo -e "\033[1;32mREFINED PROMPT:\033[0m\n$refined_prompt"
-fi
+  fi
 }
 
-prompt_engineer() {
+
+prompt_engineer_old() {
   # Helps craft and refine LLM prompts with suggestions for improvements.
   # Usage: prompt_engineer <existing_prompt> [--think] [-m MODEL_NAME] [--format=<format>] [--task=<task>]
   #        cat prompt.txt | prompt_engineer [--think] [-m MODEL_NAME] [--format=<format>] [--task=<task>]
@@ -609,34 +619,28 @@ prompt_engineer() {
   </improvements>
   <refined_prompt>Your improved version of the prompt</refined_prompt>"
 
-  local thinking_enabled=false # Use boolean flag for thinking
+  local thinking=false # Use boolean flag for thinking
   local args=()
   local model=""
-  local format="standard"
   local task=""
-  local target_model=""
   local raw=false
-  local piped_content="" # Initialize piped_content
   local user_prompt=""   # Initialize user_prompt
   local note=""          # Initialize note
 
   # Check if input is being piped
   if [ ! -t 0 ]; then
+    local piped_content
     piped_content=$(cat)
-    # Don't add piped content to args here, pass it via stdin to llm later
   fi
 
   # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --think) # Simplified boolean flag
-        thinking_enabled=true # Set boolean flag
+      --think)
+        thinking=true
         ;;
       --raw)
         raw=true
-        ;;
-      --format=*)
-        format=${1#*=}
         ;;
       -n|--note)
         if [[ -n "$2" && ! "$2" =~ ^- ]]; then
@@ -659,13 +663,7 @@ prompt_engineer() {
         fi
         ;;
       *)
-        # If not piped, collect arguments as the prompt
-        if [[ -z "$piped_content" ]]; then
-           args+=("$1")
-        else
-           # If piped, remaining args are for llm
-           args+=("$1")
-        fi
+        args+=("$1")
         ;;
     esac
     shift
@@ -685,7 +683,7 @@ prompt_engineer() {
   fi
 
 
-  if [ "$thinking_enabled" = true ]; then # Check boolean flag
+  if [ "$thinking" = true ]; then # Check boolean flag
     # Pass user_prompt for reasoning, and also pass llm args
     # structured_chain_of_thought is called with --raw to get its reasoning output
     reasoning=$(echo -e "$user_prompt" | structured_chain_of_thought --raw "${args[@]}")
@@ -695,8 +693,8 @@ prompt_engineer() {
         # Optionally return or proceed without reasoning
         return 1
     elif [[ -n "$reasoning" ]]; then
-      # Append reasoning within <thinking> tags for the main LLM call
-      system_prompt+="<thinking>$reasoning</thinking>"
+      # Append reasoning within <think> tags for the main LLM call
+      system_prompt+="<think>$reasoning</think>"
     else
       echo "Warning: Reasoning process produced no output." >&2
       # Optionally return or proceed without reasoning
@@ -722,9 +720,9 @@ prompt_engineer() {
   refined_prompt="$(echo "$response" | awk 'BEGIN{RS="<refined_prompt>"} NR==2' | awk 'BEGIN{RS="</refined_prompt>"} NR==1')"
 
   # Format output based on specified format
-  if [ "$thinking_enabled" = true ]; then # Check boolean flag
-    # Extract thinking from the *final* response (which should include the CoT reasoning if generated)
-    thinking="$(echo "$response" | awk 'BEGIN{RS="<thinking>"} NR==2' | awk 'BEGIN{RS="</thinking>"} NR==1')"
+  if [ "$thinking" = true ]; then # Check boolean flag
+    # Extract think from the *final* response (which should include the CoT reasoning if generated)
+    thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
     if [[ -n "$thinking" ]]; then # Check if thinking content exists
         echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking\n"
     fi
@@ -762,12 +760,13 @@ prompt_engineer() {
   fi
 }
 
+
 structured_chain_of_thought() {
   # Breaks down complex problems using structured reasoning steps.
-  # Usage: structured_chain_of_thought <problem description> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--steps=<steps>]
-  #        cat problem.txt | structured_chain_of_thought [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--steps=<steps>]
+  # Usage: structured_chain_of_thought <problem description> [--think=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--steps=<steps>]
+  #        cat problem.txt | structured_chain_of_thought [--think=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--steps=<steps>]
   # Options:
-  #   --thinking=LEVEL       Control reasoning depth (none, minimal, moderate, detailed, comprehensive)
+  #   --think=LEVEL       Control reasoning depth (none, minimal, moderate, detailed, comprehensive)
   #   -m MODEL_NAME          Specify which LLM model to use
   #   --steps=STEPS          Define custom reasoning steps (comma-separated)
   #   --raw                  Return the raw LLM response
@@ -789,9 +788,6 @@ structured_chain_of_thought() {
 4.  **Alternative Perspectives**:
     *   Propose 2-3 distinct approaches or critiques of your main method.
     *   *Example*: "Alternative 1: Use [method X] for better accuracy. Con: Requires more time."
-5.  **Conclusion**:
-    *   Summarize findings and final answer.
-    *   Address limitations of your reasoning and suggest next steps if unresolved.
 
 **Formatting Rules**:
 
@@ -800,11 +796,11 @@ structured_chain_of_thought() {
     `<approach>...</approach>`
     `<reasoning>...</reasoning>`
     `<alternatives>...</alternatives>`
-    `<conclusion>...</conclusion>`
 *   Avoid markdown; keep content plain text within tags.
 *   Adjust detail level based on problem complexity (e.g., minimal for simple tasks, detailed for ambiguous problems).
 
-**Critical Note**: If the problem is unclear, pause and ask clarifying questions before proceeding. Then, return <question>...</question> to the user for further input.'
+**Important Notes**: DO NOT write a final answer or conclusion. Your task is to provide a structured breakdown of the problem and reasoning process. The final answer will be generated separately.
+'
 
   local thinking_level="none"
   local args=()
@@ -969,8 +965,6 @@ llm_smell_detector() {
     echo "No smells detected, or failed to parse items within the <smells> block."
   fi
 }
-
-
 
 
 bash_script_generator() {

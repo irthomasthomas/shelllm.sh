@@ -699,22 +699,61 @@ alias backupdir='tar -czvf "$(basename "$(pwd)")_$(date "+%Y-%m-%d_%H-%M-%S").ta
 
 
 # CLIPBOARD #
-
 clip() {
-    # Copy a string to the clipboard.
+  # Copy a string or stdin to the clipboard.
+  if [ -n "$1" ]; then
     echo "$1" | xclip -selection clipboard
+  elif [ ! -t 0 ]; then # Check if stdin is not a terminal (i.e., piped input)
+    cat | xclip -selection clipboard
+  else
+    echo "Usage: clip <string> or pipe input" >&2
+    return 1
+  fi
 }
-alias copystring=clip
+
 
 pathclip() {
-    # Copy the path of a file to the clipboard.
-    echo -n $(realpath "$1") | xclip -selection clipboard
+  # Copy the real path of a file argument or stdin to the clipboard.
+  local input_path
+  if [ -n "$1" ]; then
+    input_path="$1"
+  elif [ ! -t 0 ]; then # Check if stdin is not a terminal
+    input_path=$(cat) # Read path from stdin
+  else
+    echo "Usage: pathclip <file_path> or pipe input" >&2
+    return 1
+  fi
+
+  if [ -z "$input_path" ]; then
+    echo "Error: No path provided." >&2
+    return 1
+  fi
+
+  # Check if the path exists before calling realpath
+  if [ ! -e "$input_path" ]; then
+     echo "Error: Path '$input_path' does not exist." >&2
+     return 1
+  fi
+
+  echo -n "$(realpath "$input_path")" | xclip -selection clipboard
 }
 alias copypath=pathclip
 
 fileclip() {
-    # Copy the contents of a file to the clipboard.
-    cat "$1" | xclip -selection clipboard
+  # Copy the contents of a file argument or stdin to the clipboard.
+  if [ -n "$1" ]; then
+    if [ -f "$1" ]; then
+      cat "$1" | xclip -selection clipboard
+    else
+      echo "Error: File '$1' not found." >&2
+      return 1
+    fi
+  elif [ ! -t 0 ]; then # Check if stdin is not a terminal
+    cat | xclip -selection clipboard
+  else
+    echo "Usage: fileclip <file_path> or pipe input" >&2
+    return 1
+  fi
 }
 alias copyfile=fileclip
 
