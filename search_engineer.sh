@@ -1,3 +1,5 @@
+#!/bin/bash
+
 search_engineer () {
   local system_prompt="You are a search query optimization expert. Your task is to generate multiple effective search queries based on a user's question or context. Focus on creating concise, specific queries that cover the topic from different angles. The goal is to provide the user with a diverse set of search terms that will lead to relevant and informative results.
 
@@ -49,17 +51,16 @@ Then provide one search query per line, with no additional formatting, numbering
 
   local thinking_level="none"
   local args=()
-  local model=""
   local count=5
   local auto_reasoning="true" # Set auto-reasoning to true by default
 
   # Associative array for thinking level descriptions
   declare -A thinking_descriptions
   thinking_descriptions[none]=""
-  thinking_descriptions[minimal]="Three or four sentences. Briefly identify key concepts and potential search terms related to the user's question. Focus on the most obvious and direct approaches."
+  thinking_descriptions[minimal]="Two to four sentences. Briefly identify key concepts and potential search terms related to the user's question. Focus on the most obvious and direct approaches."
   thinking_descriptions[moderate]="Five to ten sentences. Analyze the main search requirements, consider different angles and perspectives, and identify potential keywords. Explain why you are choosing specific search terms."
-  thinking_descriptions[detailed]="Ten to fifteen sentences. Thoroughly analyze the search parameters and devise a search strategy. Explore various approaches, consider the relationships between different concepts, and justify your choices in detail."
-  thinking_descriptions[comprehensive]="Twenty to thirty sentence. In-depth analysis of the user's question, exploring multiple approaches, considering trade-offs, and evaluating the potential effectiveness of different search queries. Consider background context, implicit assumptions, and potential biases."
+  thinking_descriptions[detailed]="Ten to twenty sentences. Thoroughly analyze the search parameters and devise a search strategy. Explore various approaches, consider the relationships between different concepts, and justify your choices in detail."
+  thinking_descriptions[comprehensive]="Twenty to fifty sentence. In-depth analysis of the user's question, exploring multiple approaches, considering trade-offs, and evaluating the potential effectiveness of different search queries. Consider background context, implicit assumptions, and potential biases."
 
   # Function to select a reasoning level automatically
   auto_select_reasoning() {

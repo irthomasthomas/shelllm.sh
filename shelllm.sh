@@ -159,7 +159,7 @@ shelp () {
     echo "$response"
     return
   fi
-  # Extract the first code block
+  # Uses the FIRST code block only and discards everything else.
   shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```zsh"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')" 
   
   echo "$shelllm_commands"
@@ -167,8 +167,143 @@ shelp () {
 
 alias shelp-x='shelp_wrapper() { eval "$(shelp "$@")"; }; shelp_wrapper'
 alias shelp-e='shelp_wrapper() { print -r -z "$(shelp "$@")"; }; shelp_wrapper'
+alias shelp-p='shelp-e'
+alias shelp-c='shelp-e'
 
 
+shelp_v2 () {
+    # Set options for Zsh: localoptions ensures settings are local to the function,
+    # noksharrays enables 0-indexed arrays like bash.
+    setopt localoptions noksharrays 2>/dev/null
+    
+    local system_prompt
+    local thinking=false 
+    local raw=false 
+    local piped_content
+    local user_query
+    local query_parts=()
+    local main_model=""
+    local think_model=""
+    
+    # Combine system info for prompt; paste -sd ' ' ensures it's a single line if needed.
+    system_prompt="$( (uname -a; which shelp) | paste -sd ' ' - )"
+    
+    if [ ! -t 0 ]; then
+        piped_content=$(cat)
+    fi
+    
+    local all_args_for_parsing=("$@")
+    # Loop from 0 to actual number of arguments for 0-indexed processing
+    local i=0 
+    while (( i < ${#all_args_for_parsing[@]} )); do
+        local arg="${all_args_for_parsing[$i]}"
+        local next_arg_val=""
+        
+        # Check if there's a next argument AND it doesn't start with a hyphen (i.e., it's a value)
+        if (( i + 1 < ${#all_args_for_parsing[@]} )) ; then
+            if [[ ! "${all_args_for_parsing[$((i+1))]}" =~ ^- ]]; then
+                next_arg_val="${all_args_for_parsing[$((i+1))]}"
+            fi
+        fi
+        
+        case "$arg" in
+            (--think) thinking=true ;;
+            (--raw)   raw=true ;;
+            (-m | --model)
+                if [[ -n "$next_arg_val" ]]; then
+                    main_model="$next_arg_val"
+                    ((i++)) # Increment i to consume the value
+                else
+                    echo "Error: $arg requires a model name" >&2
+                    return 1
+                fi ;;
+            (-tm | --thinking-model)
+                if [[ -n "$next_arg_val" ]]; then
+                    think_model="$next_arg_val"
+                    ((i++)) # Increment i to consume the value
+                else
+                    echo "Error: $arg requires a model name" >&2
+                    return 1
+                fi ;;
+            # Remove or make no-op: Any flag not explicitly handled above will fall to (*),
+            # which adds it to query_parts if it's a positional argument.
+            (-*)      : ;; # Ignore unrecognized flags (or add them to query_parts if needed)
+            (*)       query_parts+=("$arg") ;; # Capture non-flag arguments as part of the query
+        esac
+        ((i++)) # Move to the next argument
+    done
+
+    # Join query parts with a space
+    user_query="${query_parts[*]}" # ${(j: :)query_parts} is a more Zsh-idiomatic way to join
+    
+    local full_input=""
+    if [[ -n "$piped_content" ]]; then
+        full_input="$piped_content"
+        if [[ -n "$user_query" ]]; then
+            full_input+="\n\n${user_query}"
+        fi
+    elif [[ -n "$user_query" ]]; then
+        full_input="$user_query"
+    else
+        echo "Error: No query provided." >&2
+        return 1
+    fi
+    
+    local scot_llm_args=()
+    [[ -n "$think_model" ]] && scot_llm_args+=("-m" "$think_model")
+    local main_llm_call_args=()
+    [[ -n "$main_model" ]] && main_llm_call_args+=("-m" "$main_model")
+    
+    if [ "$thinking" = true ]; then
+        local reasoning
+        reasoning=$(echo -e "$full_input" | structured_chain_of_thought --raw "${scot_llm_args[@]}") 
+        local cot_status=$? 
+        if [[ $cot_status -ne 0 ]]; then
+            echo "Error: structured_chain_of_thought failed (exit code: $cot_status)" >&2
+            return 1
+        elif [[ -z "$reasoning" ]]; then
+            echo "Error: Reasoning process produced no output." >&2
+            return 1
+        else
+            system_prompt+="\n<think>$reasoning</think>" 
+        fi
+    fi
+    
+    local final_system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n" 
+    response=$(echo -e "$full_input" | llm -s "$final_system_prompt" --no-stream "${main_llm_call_args[@]}") 
+    local llm_status=$? 
+    if [[ $llm_status -ne 0 ]]; then
+        echo "Error: LLM command failed (exit code: $llm_status)" >&2
+        return 1
+    fi
+    
+    if [ "$raw" = true ]; then
+        echo "$response"
+        return 0
+    fi
+    
+    local shell_terminal_code
+    # Enhanced extraction for various backtick code blocks
+    if ! shell_terminal_code=$(echo -E "$response" | 
+        awk 'BEGIN{RS="```(zsh|shell|bash)"} NR==2 {print; exit}' | 
+        awk 'BEGIN{RS="```"} NR==1 {print; exit}' |
+        sed -E '/^#/d; /^[[:space:]]*$/d'); then # Remove comments and empty lines
+        echo "Command extraction failed" >&2
+        return 1
+    fi
+
+    if [[ -z "$shell_terminal_code" ]]; then
+        if [[ -n "$response" ]]; then
+            echo "Warning: Could not extract Zsh command from LLM response." >&2
+            echo "Raw LLM response:" >&2
+            echo "$response" >&2
+        else
+            echo "Error: LLM returned an empty response. No command to extract." >&2
+        fi
+        return 1
+    fi
+    echo "$shell_terminal_code"
+}
 
 commit_generator() {
   # Generates a commit message based on the changes made in the git repository.
