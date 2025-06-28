@@ -25,16 +25,6 @@ source "$script_dir/search_engineer.sh"
 source "$script_dir/code_refactor.sh"
 cd "$original_dir"
 
-bash_command() {
-  local system_prompt="$(which bash_command)"
-  echo "$system_prompt"
-  local raw_cmd=""
-  # forward all args to llm
-  raw_cmd="$(llm -s "$system_prompt" --no-stream "${args[@]}")"
-  echo "$raw_cmd"
-  # extract content between ```bash
-  echo "$raw_cmd" | awk 'BEGIN{RS="```bash"} NR==2' | awk 'BEGIN{RS="```"} NR==1' | sed '/^ *#/d;/^$/d'
-}
 
 task_plan_generator() {
   # Generates a task plan based on user input.
@@ -170,7 +160,6 @@ alias shelp-e='shelp_wrapper() { print -r -z "$(shelp "$@")"; }; shelp_wrapper'
 alias shelp-p='shelp-e'
 alias shelp-c='shelp-e'
 
-
 shelp_v2 () {
     # Set options for Zsh: localoptions ensures settings are local to the function,
     # noksharrays enables 0-indexed arrays like bash.
@@ -249,14 +238,14 @@ shelp_v2 () {
         return 1
     fi
     
-    local scot_llm_args=()
-    [[ -n "$think_model" ]] && scot_llm_args+=("-m" "$think_model")
+    local cot_llm_args=()
+    [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
     local main_llm_call_args=()
     [[ -n "$main_model" ]] && main_llm_call_args+=("-m" "$main_model")
     
     if [ "$thinking" = true ]; then
         local reasoning
-        reasoning=$(echo -e "$full_input" | structured_chain_of_thought --raw "${scot_llm_args[@]}") 
+        reasoning=$(echo -e "$full_input" | structured_chain_of_thought --raw "${cot_llm_args[@]}") 
         local cot_status=$? 
         if [[ $cot_status -ne 0 ]]; then
             echo "Error: structured_chain_of_thought failed (exit code: $cot_status)" >&2
@@ -1125,7 +1114,7 @@ bash_script_generator() {
 
 For any given description, you'll create a complete bash script following these best practices:
 - Always include proper shebang (#!/bin/bash or #!/bin/sh for POSIX)
-- Add helpful comments explaining code functionality
+- Only a few code comments to organize the script logically.
 - Implement proper error handling (set -eo pipefail where appropriate) and input validation
 - Use meaningful variable names with consistent naming conventions
 - Follow defensive programming practices
