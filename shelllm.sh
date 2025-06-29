@@ -151,7 +151,17 @@ shelp () {
   fi
   # Uses the FIRST code block only and discards everything else.
   shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```zsh"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')" 
-  
+  # if shelllm_commands is empty, display the response
+  if [[ -z "$shelllm_commands" ]]; then
+    if [[ -n "$response" ]]; then
+      echo "Warning: Could not extract Zsh command from LLM response." >&2
+      echo "Raw LLM response:" >&2
+      echo "$response" >&2
+    else
+      echo "Error: LLM returned an empty response. No command to extract." >&2
+    fi
+    return 1 # Exit with error if no command was extracted
+  fi
   echo "$shelllm_commands"
 }
 

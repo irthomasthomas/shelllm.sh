@@ -3,7 +3,7 @@ llm_notes_cid=01jkkcyfzhpcs7aax3nc6yjpjc
 compressor_cid=01jmyx7v4peds998rpwbkm7r2n
 llm_plugins_cid=01jkr7k1kad267qakefh2hb63a
 clerk_cid=01jfgh2pg75nkg9brb146mj8vm
-note_today_cid=01jsesr22sqxchsqwspvqj2akx 
+
 
 deep-bloom () {
     local stdin_data=""
@@ -116,48 +116,61 @@ Always Include code snippets if the code provided contains anything we havent se
 " -c --cid $llm_plugins_cid
 }
 
+
 note_today() {
-    # Tasks for today
-    local stdin_data=""
-    local args_to_pass=()
+    local system_prompt="<PROGRAM>Daily Task Manager</PROGRAM>
+<DESCRIPTION>Manages daily tasks and priorities.</DESCRIPTION>
+<FUNCTION>I will provide updates on my tasks for today. You will help me prioritize, track progress, and suggest next steps. Provide concise summaries and reminders.
+Include references to previous tasks if relevant, and maintain a clear structure for tasks.
+</FUNCTION>
+Keep your answers extremely short. I will ask you to expand if I desire."
 
-    if [ ! -t 0 ]; then
-        stdin_data=$(cat)
+    # If no parameters provided, return the responses
+    if [ $# -eq 0 ] && [ -t 0 ] && [ -n "$note_today_cid" ]; then
+        llm logs list --cid "$note_today_cid" --json | jq -r '.[] | .response'
+        return 0
     fi
 
+    # Separate message from llm flags
+    local stdin_data="" message="" llm_flags=()
+    [ ! -t 0 ] && stdin_data=$(cat)
+    
+    # Parse arguments to separate message from flags
     if [ $# -gt 0 ]; then
-        args_to_pass=("$@")
+        message="$1"
+        shift
+        llm_flags=("$@")
     elif [ -n "$stdin_data" ]; then
-        args_to_pass=("$stdin_data")
+        message="$stdin_data"
+    else
+        echo "Error: No input provided" >&2
+        return 1
     fi
 
-    llm --system "<MACHINE_NAME>Daily Task Manager</MACHINE_NAME>
-<MACHINE_DESCRIPTION>Manages daily tasks and priorities.</MACHINE_DESCRIPTION>
-<CORE_FUNCTION>I will provide updates on my tasks for today. You will help me prioritize, track progress, and suggest next steps. Keep track of completed tasks and upcoming deadlines. Provide concise summaries and reminders.</CORE_FUNCTION>
-Keep responses brief and focused on actionable items." -c --cid $note_today_cid "${args_to_pass[@]}" 
+    if [ -z "$note_today_cid" ]; then
+        # Create new conversation and capture CID
+        local tracking_uuid="uuid-$(date +%s)-$$"
+        local initial_input="[TRACKING_UUID: $tracking_uuid] $message"
+        
+        llm --system "$system_prompt" "${llm_flags[@]}" "$initial_input"
+        
+        note_today_cid=$(echo "
+.mode list
+.header off
+SELECT conversation_id FROM responses WHERE prompt LIKE '%$tracking_uuid%' ORDER BY id DESC LIMIT 1;
+" | sqlite3 "$(llm logs path)" 2>/dev/null)
+        
+        [ -n "$note_today_cid" ] && export note_today_cid || echo "Warning: Could not retrieve conversation ID" >&2
+    else
+        # Continue existing conversation
+        llm --system "$system_prompt" -c --cid "$note_today_cid" "${llm_flags[@]}" "$message"
+    fi
 }
 
-
 glossary_clerk() {
-    local stdin_data=""
-    local args_to_pass=()
-
-    if [ ! -t 0 ]; then
-        stdin_data=$(cat)
-    fi
-
-    if [ $# -gt 0 ]; then
-        args_to_pass=("$@")
-    elif [ -n "$stdin_data" ]; then
-        args_to_pass=("$stdin_data")
-    fi
-
-    # If no input provided, maybe list the glossary? Or prompt? For now, just pass empty.
-    # Consider adding logic here if you want specific behavior with no input.
-
-    llm "${args_to_pass[@]}" --system "<MACHINE_NAME>Glossary Clerk</MACHINE_NAME>
-<MACHINE_DESCRIPTION>Maintains a glossary of terms and their definitions.</MACHINE_DESCRIPTION>
-<CORE_FUNCTION>
+    local system_prompt="<PROGRAM>Glossary Clerk</PROGRAM>
+<DESCRIPTION>Maintains a glossary of terms and their definitions.</DESCRIPTION>
+<FUNCTION>
 I will provide you with terms and their definitions, or ask you about existing terms.
 When I provide a new term and definition (e.g., 'Term: Definition'), record it accurately.
 If I provide just a term, try to define it based on our conversation history or ask for clarification.
@@ -166,30 +179,47 @@ Maintain a consistent internal format like:
 Term: [Term Name]
 Definition: [Definition provided]
 Context/Example: [Optional: Add context or examples if provided or relevant]
-Keep responses concise. Confirm additions briefly (e.g., 'Recorded: [Term]'). When retrieving, just provide the definition.
-</CORE_FUNCTION>
-" -c --cid 01jsf84h50539s9bv0zekmmydy
-}
+Keep responses concise. When an existing term is referenced, just provide the definition.
+</FUNCTION>"
 
-alias glossary=glossary_clerk
-
-vibelab_clerk() {
-    # Notes pertaining to the development of vibelab project (Visual Baseline Evaluation Laboratory)
-    local stdin_data=""
-    local args_to_pass=()
-
-    if [ ! -t 0 ]; then
-        stdin_data=$(cat)
+    # If no parameters provided, return the responses
+    if [ $# -eq 0 ] && [ -t 0 ] && [ -n "$glossary_clerk_cid" ]; then
+        llm logs list --cid "$glossary_clerk_cid" --json | jq -r '.[] | .response'
+        return 0
     fi
 
+    # Separate message from llm flags
+    local stdin_data="" message="" llm_flags=()
+    [ ! -t 0 ] && stdin_data=$(cat)
+    
+    # Parse arguments to separate message from flags
     if [ $# -gt 0 ]; then
-        args_to_pass=("$@")
+        message="$1"
+        shift
+        llm_flags=("$@")
     elif [ -n "$stdin_data" ]; then
-        args_to_pass=("$stdin_data")
+        message="$stdin_data"
+    else
+        echo "Error: No input provided" >&2
+        return 1
     fi
 
-    llm --system "<MACHINE_NAME>VibeLab Clerk</MACHINE_NAME>
-<MACHINE_DESCRIPTION>Manages notes, ideas, and progress for the VibeLab project (Visual Baseline Evaluation Laboratory).</MACHINE_DESCRIPTION>
-<CORE_FUNCTION>I will provide updates, ideas, and questions related to the VibeLab project. You will help me organize these notes, suggest relevant technical approaches, track progress on key components (like data ingestion, visualization, baseline models, evaluation metrics), and identify potential challenges or next steps. Keep responses concise and focused on actionable insights and technical details relevant to the project's goals.</CORE_FUNCTION>
-Keep responses brief and focused on actionable items." -c --cid 01jwekxc9hc0vrqqex7dnfg9j0 "${args_to_pass[@]}"
+    if [ -z "$glossary_clerk_cid" ]; then
+        # Create new conversation and capture CID
+        local tracking_uuid="uuid-$(date +%s)-$$"
+        local initial_input="[TRACKING_UUID: $tracking_uuid] $message"
+        
+        llm --system "$system_prompt" "${llm_flags[@]}" "$initial_input"
+        
+        glossary_clerk_cid=$(echo "
+.mode list
+.header off
+SELECT conversation_id FROM responses WHERE prompt LIKE '%$tracking_uuid%' ORDER BY id DESC LIMIT 1;
+" | sqlite3 "$(llm logs path)" 2>/dev/null)
+        
+        [ -n "$glossary_clerk_cid" ] && export glossary_clerk_cid || echo "Warning: Could not retrieve conversation ID" >&2
+    else
+        # Continue existing conversation
+        llm --system "$system_prompt" -c --cid "$glossary_clerk_cid" "${llm_flags[@]}" "$message"
+    fi
 }
