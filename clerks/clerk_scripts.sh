@@ -2,8 +2,47 @@ deep_bloom_cid=01jj78cz8g5g7f2af3bsqkvsc1
 llm_notes_cid=01jkkcyfzhpcs7aax3nc6yjpjc
 compressor_cid=01jmyx7v4peds998rpwbkm7r2n
 llm_plugins_cid=01jkr7k1kad267qakefh2hb63a
-clerk_cid=01jfgh2pg75nkg9brb146mj8vm
 
+glossary_clerk_cid=""
+note_today_cid=""
+
+# State file for persisting dynamic CIDs
+CLERK_STATE_FILE="${HOME}/.config/shelllm/clerk_state"
+
+# Load CID state from file
+load_clerk_state() {
+    if [ -f "$CLERK_STATE_FILE" ]; then
+        source "$CLERK_STATE_FILE"
+        # Export the variables to make them available in current session
+        [ -n "$glossary_clerk_cid" ] && export glossary_clerk_cid
+        [ -n "$note_today_cid" ] && export note_today_cid
+    fi
+}
+
+# Save CID state to file
+save_clerk_state() {
+    local var_name="$1"
+    local var_value="$2"
+    
+    mkdir -p "$(dirname "$CLERK_STATE_FILE")"
+    
+    # Create temp file with all current variables preserved
+    local temp_file="${CLERK_STATE_FILE}.tmp"
+    
+    # Start with existing content, excluding the variable being updated
+    if [ -f "$CLERK_STATE_FILE" ]; then
+        grep -v "^${var_name}=" "$CLERK_STATE_FILE" > "$temp_file" 2>/dev/null || true
+    else
+        touch "$temp_file"
+    fi
+    
+    # Add the new/updated variable
+    echo "${var_name}=\"${var_value}\"" >> "$temp_file"
+    
+    # Replace original file
+    cat "$temp_file" > "$CLERK_STATE_FILE"
+    rm -f "$temp_file"
+}
 
 deep-bloom () {
     local stdin_data=""
@@ -118,6 +157,11 @@ Always Include code snippets if the code provided contains anything we havent se
 
 
 note_today() {
+    # Load state if not already loaded
+    if [ -z "$note_today_cid" ]; then
+        load_clerk_state
+    fi
+
     local system_prompt="<PROGRAM>Daily Task Manager</PROGRAM>
 <DESCRIPTION>Manages daily tasks and priorities.</DESCRIPTION>
 <FUNCTION>I will provide updates on my tasks for today. You will help me prioritize, track progress, and suggest next steps. Provide concise summaries and reminders.
@@ -149,7 +193,7 @@ Keep your answers extremely short. I will ask you to expand if I desire."
 
     if [ -z "$note_today_cid" ]; then
         # Create new conversation and capture CID
-        local tracking_uuid="uuid-$(date +%s)-$$"
+        local tracking_uuid="$(uuidgen)"
         local initial_input="[TRACKING_UUID: $tracking_uuid] $message"
         
         llm --system "$system_prompt" "${llm_flags[@]}" "$initial_input"
@@ -160,7 +204,12 @@ Keep your answers extremely short. I will ask you to expand if I desire."
 SELECT conversation_id FROM responses WHERE prompt LIKE '%$tracking_uuid%' ORDER BY id DESC LIMIT 1;
 " | sqlite3 "$(llm logs path)" 2>/dev/null)
         
-        [ -n "$note_today_cid" ] && export note_today_cid || echo "Warning: Could not retrieve conversation ID" >&2
+        if [ -n "$note_today_cid" ]; then
+            export note_today_cid
+            save_clerk_state "note_today_cid" "$note_today_cid"
+        else
+            echo "Warning: Could not retrieve conversation ID" >&2
+        fi
     else
         # Continue existing conversation
         llm --system "$system_prompt" -c --cid "$note_today_cid" "${llm_flags[@]}" "$message"
@@ -168,6 +217,11 @@ SELECT conversation_id FROM responses WHERE prompt LIKE '%$tracking_uuid%' ORDER
 }
 
 glossary_clerk() {
+    # Load state if not already loaded
+    if [ -z "$glossary_clerk_cid" ]; then
+        load_clerk_state
+    fi
+
     local system_prompt="<PROGRAM>Glossary Clerk</PROGRAM>
 <DESCRIPTION>Maintains a glossary of terms and their definitions.</DESCRIPTION>
 <FUNCTION>
@@ -204,9 +258,9 @@ Keep responses concise. When an existing term is referenced, just provide the de
         return 1
     fi
 
-    if [ -z "$glossary_clerk_cid" ]; then
+    if [ -z "$glossary_clerk_cid" ]; then 
         # Create new conversation and capture CID
-        local tracking_uuid="uuid-$(date +%s)-$$"
+        local tracking_uuid="$(uuidgen)"
         local initial_input="[TRACKING_UUID: $tracking_uuid] $message"
         
         llm --system "$system_prompt" "${llm_flags[@]}" "$initial_input"
@@ -217,9 +271,16 @@ Keep responses concise. When an existing term is referenced, just provide the de
 SELECT conversation_id FROM responses WHERE prompt LIKE '%$tracking_uuid%' ORDER BY id DESC LIMIT 1;
 " | sqlite3 "$(llm logs path)" 2>/dev/null)
         
-        [ -n "$glossary_clerk_cid" ] && export glossary_clerk_cid || echo "Warning: Could not retrieve conversation ID" >&2
+        if [ -n "$glossary_clerk_cid" ]; then
+            export glossary_clerk_cid
+            save_clerk_state "glossary_clerk_cid" "$glossary_clerk_cid"
+        else
+            echo "Warning: Could not retrieve conversation ID" >&2
+        fi
     else
         # Continue existing conversation
         llm --system "$system_prompt" -c --cid "$glossary_clerk_cid" "${llm_flags[@]}" "$message"
     fi
 }
+
+alias glossary="glossary_clerk"
