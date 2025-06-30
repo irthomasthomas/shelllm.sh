@@ -378,6 +378,18 @@ commit_generator() {
     fi
     commit_msg="$(echo "$response" | awk 'BEGIN{RS="<commit_msg>"} NR==2' | awk 'BEGIN{RS="</commit_msg>"} NR==1')"
     
+    # Validate that we extracted a commit message
+    if [[ -z "$commit_msg" || "$commit_msg" =~ ^[[:space:]]*$ ]]; then
+      echo "Warning: Could not extract commit message from response. Displaying raw response:" >&2
+      echo "$response"
+      echo -n "Try again? [y/n]: "
+      read -r retry
+      if [[ "$retry" != "y" ]]; then
+        return 1
+      fi
+      continue
+    fi
+    
     if [ "$thinking_level" != "none" ]; then
       thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
       echo -e "\nThinking:\n$thinking\n"
@@ -393,20 +405,42 @@ commit_generator() {
       git push
       break
     elif [[ "$confirm" == "e" ]]; then
-      # Allow editing the commit message
-      echo "$commit_msg" > /tmp/commit-msg-edit
-      ${EDITOR:-vi} /tmp/commit-msg-edit
-      commit_msg=$(cat /tmp/commit-msg-edit)
-      rm /tmp/commit-msg-edit
+      # Create a more secure temporary file
+      temp_file=$(mktemp -t commit-msg-edit.XXXXXX)
+      if [[ $? -ne 0 ]]; then
+        echo "Error: Could not create temporary file for editing" >&2
+        continue
+      fi
       
-      echo -e "\nEdited commit message:\n$commit_msg\n"
-      echo -n "Confirm commit and push? [y/n]: "
-      read -r confirm2
+      # Write the commit message to the temp file
+      echo "$commit_msg" > "$temp_file"
       
-      if [[ "$confirm2" == "y" ]]; then
-        git commit -m "$commit_msg"
-        git push
-        break
+      # Open in editor
+      ${EDITOR:-vi} "$temp_file"
+      
+      # Read back the edited message
+      if [[ -f "$temp_file" ]]; then
+        commit_msg=$(cat "$temp_file")
+        rm -f "$temp_file"
+        
+        # Validate edited message is not empty
+        if [[ -z "$commit_msg" || "$commit_msg" =~ ^[[:space:]]*$ ]]; then
+          echo "Error: Commit message cannot be empty after editing" >&2
+          continue
+        fi
+        
+        echo -e "\nEdited commit message:\n$commit_msg\n"
+        echo -n "Confirm commit and push? [y/n]: "
+        read -r confirm2
+        
+        if [[ "$confirm2" == "y" ]]; then
+          git commit -m "$commit_msg"
+          git push
+          break
+        fi
+      else
+        echo "Error: Could not read edited commit message" >&2
+        continue
       fi
     elif [[ "$confirm" == "n" ]]; then
       echo "Regenerating commit message..."
