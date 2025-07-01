@@ -26,6 +26,78 @@ source "$script_dir/code_refactor.sh"
 cd "$original_dir"
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 task_plan_generator() {
   # Generates a task plan based on user input.
   # Usage: task_plan_generator <task description> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--note=NOTE|-n NOTE]
@@ -114,6 +186,8 @@ task_plan_generator() {
   fi
   echo "$plan"
 }
+
+
 
 # local system_prompt="$info\n\nwrite shell terminal commands to accomplish the task beautifully. The command will be run directly in the zsh terminal so code comments are not allowed. The command should be practical and effective, with a technical tone. code should be formatted in a code block, e.g.: \`\`\`bash" 
 shelp () {
