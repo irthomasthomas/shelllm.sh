@@ -27,77 +27,6 @@ cd "$original_dir"
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 task_plan_generator() {
   # Generates a task plan based on user input.
   # Usage: task_plan_generator <task description> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--note=NOTE|-n NOTE]
@@ -187,23 +116,50 @@ task_plan_generator() {
   echo "$plan"
 }
 
-
-
-# local system_prompt="$info\n\nwrite shell terminal commands to accomplish the task beautifully. The command will be run directly in the zsh terminal so code comments are not allowed. The command should be practical and effective, with a technical tone. code should be formatted in a code block, e.g.: \`\`\`bash" 
 shelp () {
   local info="$(uname -a)" 
   local system_prompt="$(which shelp)\n\n$info"
   local thinking=false 
   local args=() 
   local raw=false
+  local execute=false
+  local edit=false
+  local continue_conversation=false
+  local state_file="/tmp/shelp_last_execution.log"
+  local piped_content=""
+
   if [ ! -t 0 ]; then
-    local piped_content
     piped_content=$(cat) 
   fi
+
+  # We need to parse args to check for -c before building the prompt
+  local temp_args=("$@")
+  for arg in "${temp_args[@]}"; do
+    if [[ "$arg" == "-c" ]]; then
+      continue_conversation=true
+      break
+    fi
+  done
+
+  # If -c is passed, check for and include the output of the last executed command
+  if [ "$continue_conversation" = true ] && [[ -f "$state_file" ]]; then
+    local last_execution_output
+    last_execution_output=$(cat "$state_file")
+    if [[ -n "$last_execution_output" ]]; then
+      piped_content+="$(printf "<LAST_COMMAND_OUTPUT>\n%s\n</LAST_COMMAND_OUTPUT>\n\n" "$last_execution_output")"
+    fi
+    
+    # Clear the state file after reading it to ensure it's only used once
+    true > "$state_file"
+  fi
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       (--think) thinking=true  ;;
       (--raw) raw=true  ;;
+      (-x|--execute) execute=true  ;;
+      (-e|--edit) edit=true  ;;
+      # -c is not a shelp-specific flag, so it's passed to llm via (*)
       (*) args+=("$1")  ;;
     esac
     shift
@@ -236,13 +192,27 @@ shelp () {
     fi
     return 1 # Exit with error if no command was extracted
   fi
-  echo "$shelllm_commands"
+  
+  # Handle execution modes
+  if [ "$execute" = true ]; then
+    # Execute the command, capture its output/error, and display it
+    local execution_output
+    execution_output=$(eval "$shelllm_commands" 2>&1)
+    echo "$execution_output"
+    # Save the output for a potential subsequent shelp call with -c
+    echo "$execution_output" > "$state_file"
+  elif [ "$edit" = true ]; then
+    print -r -z "$shelllm_commands"
+  else
+    echo "$shelllm_commands"
+  fi
 }
 
-alias shelp-x='shelp_wrapper() { eval "$(shelp "$@")"; }; shelp_wrapper'
-alias shelp-e='shelp_wrapper() { print -r -z "$(shelp "$@")"; }; shelp_wrapper'
-alias shelp-p='shelp-e'
-alias shelp-c='shelp-e'
+# Update aliases to use the new flags
+alias shelp-x='shelp --execute'
+alias shelp-e='shelp --edit'
+alias shelp-p='shelp --edit'
+alias shelp-c='shelp --edit'
 
 shelp_v2 () {
     # Set options for Zsh: localoptions ensures settings are local to the function,
