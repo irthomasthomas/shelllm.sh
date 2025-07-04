@@ -348,16 +348,18 @@ shelp_v2 () {
     echo "$shell_terminal_code"
 }
 
+
 commit_generator() {
   # Generates a commit message based on the changes made in the git repository.
   # Usage: commit_generator [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--note=NOTE|-n NOTE]
-  local system_prompt="Write a sensible commit message for the changes made. The commit message should be concise and descriptive, with a technical tone. Include the following XML tags in your response: <commit_msg>...</commit_msg>"
+  local system_prompt="Write a clever and concise commit message. The commit message should be concise and descriptive, with a technical tone. Include the following XML tags in your response: <commit_msg>...</commit_msg>"
   local thinking_level="none"
   local args=()
   local model=""
   local note=""
   local diff=""
   local raw=false
+  local rejected_messages=()
   
   
   # Process arguments
@@ -369,7 +371,6 @@ commit_generator() {
       -n|--note)
         if [[ -n "$2" && ! "$2" =~ ^- ]]; then
           note="$2"
-          system_prompt+=" <note>$note</note>"
           shift
         else
           echo "Error: -n/--note requires a note string" >&2
@@ -405,17 +406,31 @@ commit_generator() {
       diff="$(git diff --cached --stat)"
     fi
     
+    # Build the user prompt
+    local user_prompt=""
+    if [[ -n "$note" ]]; then
+      user_prompt+="$(printf "<note>\n%s\n</note>\n\n" "$note")"
+    fi
+
+    if [[ ${#rejected_messages[@]} -gt 0 ]]; then
+      user_prompt+="$(printf "\n\n<rejected_messages>\n")"
+      for rejected_msg in "${rejected_messages[@]}"; do
+        user_prompt+="$(printf "\n<rejected>\n%s\n</rejected>\n\n" "$rejected_msg")"
+      done
+      user_prompt+="$(printf "\n</rejected_messages>\n")"
+    fi
+    
     if [ "$thinking_level" != "none" ]; then
       reasoning=$(echo -e "$diff" | structured_chain_of_thought --raw "${args[@]}")
       if [[ -n "$reasoning" ]]; then
-        system_prompt+="<thinking>$reasoning</thinking>"
+        user_prompt+="$(printf "\n\n<thinking>\n%s\n</thinking>\n\n" "$reasoning")"
       else
         echo "Error: No reasoning provided" >&2
         return 1
       fi
     fi
     
-    response=$(echo -e "$diff" | llm -s "$system_prompt" --no-stream "${args[@]}")
+    response=$(echo -e "$user_prompt\n\n$diff" | llm -s "$system_prompt" --no-stream "${args[@]}")
     if [ "$raw" = true ]; then
       echo "$response"
       return
@@ -481,12 +496,18 @@ commit_generator() {
           git commit -m "$commit_msg"
           git push
           break
+        elif [[ "$confirm2" == "n" ]]; then
+          # Add the edited message to rejected messages
+          rejected_messages+=("$commit_msg")
+          echo "Regenerating commit message..."
         fi
       else
         echo "Error: Could not read edited commit message" >&2
         continue
       fi
     elif [[ "$confirm" == "n" ]]; then
+      # Add the rejected message to the array
+      rejected_messages+=("$commit_msg")
       echo "Regenerating commit message..."
       # Loop continues
     else
