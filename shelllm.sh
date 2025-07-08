@@ -127,6 +127,7 @@ shelp () {
   local continue_conversation=false
   local state_file="/tmp/shelp_last_execution.log"
   local piped_content=""
+  local think_model=""
 
   if [ ! -t 0 ]; then
     piped_content=$(cat) 
@@ -159,13 +160,24 @@ shelp () {
       (--raw) raw=true  ;;
       (-x|--execute) execute=true  ;;
       (-e|--edit) edit=true  ;;
+      (-tm|--thinking-model)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          think_model="$2"
+          shift
+        else
+          echo "Error: $1 requires a model name" >&2
+          return 1
+        fi
+        ;;
       # -c is not a shelp-specific flag, so it's passed to llm via (*)
       (*) args+=("$1")  ;;
     esac
     shift
   done
   if [ "$thinking" = true ]; then
-    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}") 
+    local cot_llm_args=()
+    [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
+    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}") 
     if [[ -n "$reasoning" ]]; then
       system_prompt+="<thinking>$reasoning</thinking>" 
     else
@@ -196,6 +208,7 @@ shelp () {
   # Handle execution modes
   if [ "$execute" = true ]; then
     # Execute the command, capture its output/error, and display it
+    echo "$shelllm_commands"
     local execution_output
     execution_output=$(eval "$shelllm_commands" 2>&1)
     echo "$execution_output"
@@ -352,6 +365,7 @@ shelp_v2 () {
 commit_generator() {
   # Generates a commit message based on the changes made in the git repository.
   # Usage: commit_generator [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--note=NOTE|-n NOTE]
+  # Todo: Auto eval using llm feedback+1 or -1 --prompt_id <PROMPT_ID> based on if the user accepts or rejects the commit message.
   local system_prompt="Write a clever and concise commit message. The commit message should be concise and descriptive, with a technical tone. Include the following XML tags in your response: <commit_msg>...</commit_msg>"
   local thinking_level="none"
   local args=()
