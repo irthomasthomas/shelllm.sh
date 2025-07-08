@@ -163,6 +163,7 @@ shelp () {
       (-tm|--thinking-model)
         if [[ -n "$2" && ! "$2" =~ ^- ]]; then
           think_model="$2"
+          thinking=true
           shift
         else
           echo "Error: $1 requires a model name" >&2
@@ -227,160 +228,36 @@ alias shelp-e='shelp --edit'
 alias shelp-p='shelp --edit'
 alias shelp-c='shelp --edit'
 
-shelp_v2 () {
-    # Set options for Zsh: localoptions ensures settings are local to the function,
-    # noksharrays enables 0-indexed arrays like bash.
-    setopt localoptions noksharrays 2>/dev/null
-    
-    local system_prompt
-    local thinking=false 
-    local raw=false 
-    local piped_content
-    local user_query
-    local query_parts=()
-    local main_model=""
-    local think_model=""
-    
-    # Combine system info for prompt; paste -sd ' ' ensures it's a single line if needed.
-    system_prompt="$( (uname -a; which shelp) | paste -sd ' ' - )"
-    
-    if [ ! -t 0 ]; then
-        piped_content=$(cat)
-    fi
-    
-    local all_args_for_parsing=("$@")
-    # Loop from 0 to actual number of arguments for 0-indexed processing
-    local i=0 
-    while (( i < ${#all_args_for_parsing[@]} )); do
-        local arg="${all_args_for_parsing[$i]}"
-        local next_arg_val=""
-        
-        # Check if there's a next argument AND it doesn't start with a hyphen (i.e., it's a value)
-        if (( i + 1 < ${#all_args_for_parsing[@]} )) ; then
-            if [[ ! "${all_args_for_parsing[$((i+1))]}" =~ ^- ]]; then
-                next_arg_val="${all_args_for_parsing[$((i+1))]}"
-            fi
-        fi
-        
-        case "$arg" in
-            (--think) thinking=true ;;
-            (--raw)   raw=true ;;
-            (-m | --model)
-                if [[ -n "$next_arg_val" ]]; then
-                    main_model="$next_arg_val"
-                    ((i++)) # Increment i to consume the value
-                else
-                    echo "Error: $arg requires a model name" >&2
-                    return 1
-                fi ;;
-            (-tm | --thinking-model)
-                if [[ -n "$next_arg_val" ]]; then
-                    think_model="$next_arg_val"
-                    ((i++)) # Increment i to consume the value
-                else
-                    echo "Error: $arg requires a model name" >&2
-                    return 1
-                fi ;;
-            # Remove or make no-op: Any flag not explicitly handled above will fall to (*),
-            # which adds it to query_parts if it's a positional argument.
-            (-*)      : ;; # Ignore unrecognized flags (or add them to query_parts if needed)
-            (*)       query_parts+=("$arg") ;; # Capture non-flag arguments as part of the query
-        esac
-        ((i++)) # Move to the next argument
-    done
-
-    # Join query parts with a space
-    user_query="${query_parts[*]}" # ${(j: :)query_parts} is a more Zsh-idiomatic way to join
-    
-    local full_input=""
-    if [[ -n "$piped_content" ]]; then
-        full_input="$piped_content"
-        if [[ -n "$user_query" ]]; then
-            full_input+="\n\n${user_query}"
-        fi
-    elif [[ -n "$user_query" ]]; then
-        full_input="$user_query"
-    else
-        echo "Error: No query provided." >&2
-        return 1
-    fi
-    
-    local cot_llm_args=()
-    [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
-    local main_llm_call_args=()
-    [[ -n "$main_model" ]] && main_llm_call_args+=("-m" "$main_model")
-    
-    if [ "$thinking" = true ]; then
-        local reasoning
-        reasoning=$(echo -e "$full_input" | structured_chain_of_thought --raw "${cot_llm_args[@]}") 
-        local cot_status=$? 
-        if [[ $cot_status -ne 0 ]]; then
-            echo "Error: structured_chain_of_thought failed (exit code: $cot_status)" >&2
-            return 1
-        elif [[ -z "$reasoning" ]]; then
-            echo "Error: Reasoning process produced no output." >&2
-            return 1
-        else
-            system_prompt+="\n<think>$reasoning</think>" 
-        fi
-    fi
-    
-    local final_system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n" 
-    response=$(echo -e "$full_input" | llm -s "$final_system_prompt" --no-stream "${main_llm_call_args[@]}") 
-    local llm_status=$? 
-    if [[ $llm_status -ne 0 ]]; then
-        echo "Error: LLM command failed (exit code: $llm_status)" >&2
-        return 1
-    fi
-    
-    if [ "$raw" = true ]; then
-        echo "$response"
-        return 0
-    fi
-    
-    local shell_terminal_code
-    # Enhanced extraction for various backtick code blocks
-    if ! shell_terminal_code=$(echo -E "$response" | 
-        awk 'BEGIN{RS="```(zsh|shell|bash)"} NR==2 {print; exit}' | 
-        awk 'BEGIN{RS="```"} NR==1 {print; exit}' |
-        sed -E '/^#/d; /^[[:space:]]*$/d'); then # Remove comments and empty lines
-        echo "Command extraction failed" >&2
-        return 1
-    fi
-
-    if [[ -z "$shell_terminal_code" ]]; then
-        if [[ -n "$response" ]]; then
-            echo "Warning: Could not extract Zsh command from LLM response." >&2
-            echo "Raw LLM response:" >&2
-            echo "$response" >&2
-        else
-            echo "Error: LLM returned an empty response. No command to extract." >&2
-        fi
-        return 1
-    fi
-    echo "$shell_terminal_code"
-}
-
 
 commit_generator() {
   # Generates a commit message based on the changes made in the git repository.
   # Usage: commit_generator [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--note=NOTE|-n NOTE]
   # Todo: Auto eval using llm feedback+1 or -1 --prompt_id <PROMPT_ID> based on if the user accepts or rejects the commit message.
-  local system_prompt="Write a clever and concise commit message. The commit message should be concise and descriptive, with a technical tone. Include the following XML tags in your response: <commit_msg>...</commit_msg>"
-  local thinking_level="none"
+  local system_prompt="Use ACTIVE voice. Write a clever and concise commit message. The commit message should be concise and descriptive, with a technical tone. Include the following XML tags in your response: <commit_msg>...</commit_msg>"
+  local thinking=false
   local args=()
   local model=""
   local note=""
   local diff=""
   local raw=false
   local rejected_messages=()
-  
+  local uuid="$(uuidgen)"
   
   # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --thinking=*)
         thinking_level=${1#*=}
+        ;;
+      (-tm|--thinking-model)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          think_model="$2"
+          thinking=true
+          shift
+        else
+          echo "Error: $1 requires a model name" >&2
+          return 1
+        fi
         ;;
       -n|--note)
         if [[ -n "$2" && ! "$2" =~ ^- ]]; then
@@ -429,13 +306,16 @@ commit_generator() {
     if [[ ${#rejected_messages[@]} -gt 0 ]]; then
       user_prompt+="$(printf "\n\n<rejected_messages>\n")"
       for rejected_msg in "${rejected_messages[@]}"; do
-        user_prompt+="$(printf "\n<rejected>\n%s\n</rejected>\n\n" "$rejected_msg")"
+        user_prompt+="$(printf "\n<reject>\n%s\n</reject>\n\n" "$rejected_msg")"
       done
       user_prompt+="$(printf "\n</rejected_messages>\n")"
     fi
-    
-    if [ "$thinking_level" != "none" ]; then
-      reasoning=$(echo -e "$diff" | structured_chain_of_thought --raw "${args[@]}")
+
+    if [ "$thinking" = true ]; then
+      reasoning_prompt="$(printf "%s\n\nPlease provide your reasoning for the commit message based on the changes made:\n\n%s\n\nDO NOT MAKE ASSUMPTIONS." "$uuid" "$diff")"
+      diff_and_reasoning="$diff\n\n<reasoning>\n$reasoning_prompt\n</reasoning>"
+      reasoning=$(echo -e "$diff_and_reasoning" | structured_chain_of_thought --raw -m "$think_model")
+      # reasoning=$(echo -e "$diff" | structured_chain_of_thought --raw "${args[@]}")
       if [[ -n "$reasoning" ]]; then
         user_prompt+="$(printf "\n\n<thinking>\n%s\n</thinking>\n\n" "$reasoning")"
       else
@@ -444,7 +324,7 @@ commit_generator() {
       fi
     fi
     
-    response=$(echo -e "$user_prompt\n\n$diff" | llm -s "$system_prompt" --no-stream "${args[@]}")
+    response=$(echo -e "$uuid\n\n$user_prompt\n\n$diff\n\nDO NOT MAKE ASSUMPTIONS" | llm -s "$system_prompt" --no-stream "${args[@]}")
     if [ "$raw" = true ]; then
       echo "$response"
       return
@@ -461,11 +341,6 @@ commit_generator() {
         return 1
       fi
       continue
-    fi
-    
-    if [ "$thinking_level" != "none" ]; then
-      thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
-      echo -e "\nThinking:\n$thinking\n"
     fi
     
     # Display commit message and ask for confirmation
@@ -757,7 +632,9 @@ prompt_engineer() {
     <item>Second improvement suggestion with explanation</item>
     ...
   </improvements>
-  <refined_prompt>Your improved version of the prompt</refined_prompt>"
+  <refined_prompt>
+    Your improved version of the prompt
+  </refined_prompt>"
   local thinking_level="none"
   local args=()
   local model=""
@@ -839,174 +716,6 @@ prompt_engineer() {
 }
 
 
-prompt_engineer_old() {
-  # Helps craft and refine LLM prompts with suggestions for improvements.
-  # Usage: prompt_engineer <existing_prompt> [--think] [-m MODEL_NAME] [--format=<format>] [--task=<task>]
-  #        cat prompt.txt | prompt_engineer [--think] [-m MODEL_NAME] [--format=<format>] [--task=<task>]
-  # Options:
-  #   --think               Enable and display the reasoning process
-  #   -m MODEL_NAME         Specify which LLM model to use
-  #   --format=<format>     Output format (standard, detailed, structured)
-  #   --task <task>         Specific task the prompt is for (classification, generation, etc.)
-
-  local system_prompt="You are a prompt engineering expert. Your task is to analyze the given prompt and suggest improvements to make it more effective for LLMs.
-
-  Follow these steps:
-  1. Analyze the provided prompt's structure, clarity, and specificity
-  2. Identify weaknesses, ambiguities, or areas that could cause misunderstanding
-  3. Suggest specific improvements with explanations
-  4. Provide a refined version of the prompt
-
-  Format your response with these XML tags:
-  <analysis>Your analysis of the prompt's strengths and weaknesses</analysis>
-  <improvements>
-    <item>First improvement suggestion with explanation</item>
-    <item>Second improvement suggestion with explanation</item>
-    ...
-  </improvements>
-  <refined_prompt>Your improved version of the prompt</refined_prompt>"
-
-  local thinking=false # Use boolean flag for thinking
-  local args=()
-  local model=""
-  local task=""
-  local raw=false
-  local user_prompt=""   # Initialize user_prompt
-  local note=""          # Initialize note
-
-  # Check if input is being piped
-  if [ ! -t 0 ]; then
-    local piped_content
-    piped_content=$(cat)
-  fi
-
-  # Process arguments
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --think)
-        thinking=true
-        ;;
-      --raw)
-        raw=true
-        ;;
-      -n|--note)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          note="$2"
-          system_prompt+=" <note>$note</note>"
-          shift
-        else
-          echo "Error: -n/--note requires a note string" >&2
-          return 1
-        fi
-        ;;
-      --task)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          task="$2"
-          system_prompt+=" <task>$task</task>"
-          shift
-        else
-          echo "Error: --task requires a task description" >&2
-          return 1
-        fi
-        ;;
-      *)
-        args+=("$1")
-        ;;
-    esac
-    shift
-  done
-
-  # If not piped, construct user_prompt from collected args
-  user_prompt="$piped_content"
-  if [[ -z "$piped_content" ]]; then
-      if [[ ${#args[@]} -eq 0 ]]; then
-          echo "Error: No prompt provided." >&2
-          echo "Usage: prompt_engineer <prompt> [options]" >&2
-          echo "       cat prompt.txt | prompt_engineer [options]" >&2
-          return 1
-      fi
-      user_prompt="${args[*]}"
-      args=() # Reset args if they were used for the prompt itself
-  fi
-
-
-  if [ "$thinking" = true ]; then # Check boolean flag
-    # Pass user_prompt for reasoning, and also pass llm args
-    # structured_chain_of_thought is called with --raw to get its reasoning output
-    reasoning=$(echo -e "$user_prompt" | structured_chain_of_thought --raw "${args[@]}")
-    local cot_status=$?
-    if [[ $cot_status -ne 0 ]]; then
-        echo "Error: Failed to generate reasoning (exit code: $cot_status)" >&2
-        # Optionally return or proceed without reasoning
-        return 1
-    elif [[ -n "$reasoning" ]]; then
-      # Append reasoning within <think> tags for the main LLM call
-      system_prompt+="<think>$reasoning</think>"
-    else
-      echo "Warning: Reasoning process produced no output." >&2
-      # Optionally return or proceed without reasoning
-      # return 1
-    fi
-  fi
-  # Call LLM
-  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
-  response=$(echo -e "$user_prompt" | llm -s "$system_prompt" --no-stream "${args[@]}")
-  local llm_status=$?
-   if [[ $llm_status -ne 0 ]]; then
-    echo "Error: LLM command failed (exit code: $llm_status)" >&2
-    return 1
-  fi
-
-  if [ "$raw" = true ]; then
-    echo "$response"
-    return
-  fi
-  # Extract sections
-  analysis="$(echo "$response" | awk 'BEGIN{RS="<analysis>"} NR==2' | awk 'BEGIN{RS="</analysis>"} NR==1')"
-  improvements="$(echo "$response" | awk 'BEGIN{RS="<improvements>"} NR==2' | awk 'BEGIN{RS="</improvements>"} NR==1' | sed 's/<item>//g; s/<\/item>/\n/g')"
-  refined_prompt="$(echo "$response" | awk 'BEGIN{RS="<refined_prompt>"} NR==2' | awk 'BEGIN{RS="</refined_prompt>"} NR==1')"
-
-  # Format output based on specified format
-  if [ "$thinking" = true ]; then # Check boolean flag
-    # Extract think from the *final* response (which should include the CoT reasoning if generated)
-    thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
-    if [[ -n "$thinking" ]]; then # Check if thinking content exists
-        echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking\n"
-    fi
-  fi
-
-  # check if analysis is empty and if so return the raw response
-  if [[ -z "$analysis" && -z "$refined_prompt" ]]; then # Check both analysis and refined prompt
-    echo "Warning: Could not extract analysis or refined prompt. Displaying raw response:" >&2
-    echo "$response"
-    return 1 # Indicate failure
-  fi
-
-  # Default standard format
-  if [[ -n "$analysis" ]]; then
-    echo -e "\033[1;36mPROMPT ANALYSIS:\033[0m\n$analysis\n"
-  fi
-
-  if [[ -n "$improvements" ]]; then
-    echo -e "\033[1;33mIMPROVEMENT SUGGESTIONS:\033[0m"
-    count=1
-    while IFS= read -r line; do
-      # Trim whitespace before checking if line is empty
-      trimmed_line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-      if [[ -n "$trimmed_line" ]]; then
-        echo -e "$count. $trimmed_line"
-        ((count++))
-      fi
-    done <<< "$improvements"
-    # Add a newline after suggestions if there were any
-    [[ $count -gt 1 ]] && echo ""
-  fi
-
-  if [[ -n "$refined_prompt" ]]; then
-    echo -e "\033[1;32mREFINED PROMPT:\033[0m\n$refined_prompt"
-  fi
-}
-
 
 structured_chain_of_thought() {
   # Breaks down complex problems using structured reasoning steps.
@@ -1018,36 +727,36 @@ structured_chain_of_thought() {
   #   --steps=STEPS          Define custom reasoning steps (comma-separated)
   #   --raw                  Return the raw LLM response
   
-  local system_prompt='You are a reasoning assistant that helps break down complex problems through structured thinking. Follow these steps meticulously:
+  local system_prompt="You are a reasoning assistant that helps break down complex problems through structured thinking. Follow these steps meticulously:
 
 1.  **Problem Understanding**:
     *   Restate the problem in your own words to confirm understanding.
-    *   *Example*: "The user is asking to [specific task], which requires [key elements]."
+    *   *Example*: \"The user is asking to [specific task], which requires [key elements].\"
     *   Validate alignment with the user’s intent before proceeding.
 2.  **Approach Planning**:
     *   Outline a clear, step-by-step strategy using bullet points.
-    *   *Example*: "1. Gather relevant data. 2. Apply [method]. 3. Validate results."
+    *   *Example*: \"1. Gather relevant data. 2. Apply [method]. 3. Validate results.\"
     *   Justify why this approach is suitable.
 3.  **Step-by-Step Reasoning**:
     *   Execute your plan with numbered steps, showing calculations/logic.
-    *   *Example*: "Step 1: [Action]. Step 2: [Calculation]."
+    *   *Example*: \"Step 1: [Action]. Step 2: [Calculation].\"
     *   Highlight assumptions and potential pitfalls.
 4.  **Alternative Perspectives**:
     *   Propose 2-3 distinct approaches or critiques of your main method.
-    *   *Example*: "Alternative 1: Use [method X] for better accuracy. Con: Requires more time."
+    *   *Example*: \"Alternative 1: Use [method X] for better accuracy. Con: Requires more time.\"
 
 **Formatting Rules**:
 
 *   Use XML tags exactly as specified:
-    `<problem_understanding>...</problem_understanding>`
-    `<approach>...</approach>`
-    `<reasoning>...</reasoning>`
-    `<alternatives>...</alternatives>`
+    <problem_understanding>...</problem_understanding>
+    <approach>...</approach>
+    <reasoning>...</reasoning>
+    <alternatives>...</alternatives>
 *   Avoid markdown; keep content plain text within tags.
 *   Adjust detail level based on problem complexity (e.g., minimal for simple tasks, detailed for ambiguous problems).
 
 **Important Notes**: DO NOT write a final answer or conclusion. Your task is to provide a structured breakdown of the problem and reasoning process. The final answer will be generated separately.
-'
+"
 
   local thinking_level="none"
   local args=()
