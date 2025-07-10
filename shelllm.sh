@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Record original directory and locate script dir
 original_dir=$(pwd)
 
@@ -5,9 +7,9 @@ original_dir=$(pwd)
 if [[ -n "${BASH_SOURCE[0]}" ]]; then
   # For bash
   script_path="${BASH_SOURCE[0]}"
-elif [[ -n "${(%):-%x}" ]]; then
+elif [[ -n "$ZSH_VERSION" ]]; then
   # For zsh
-  script_path="${(%):-%x}"
+  script_path="$0"
 else
   # Fallback method
   script_path="$0"
@@ -1356,3 +1358,302 @@ mermaid_charts() {
 }
 # Add alias for ease of use
 alias mermaid=mermaid_charts
+
+
+
+function strip_comments() {
+    sed -E '/^#!\/(bin\/bash|usr\/bin\/env bash)/!s/\s*#.*$//g' | \
+        grep -v '^[[:space:]]*$'
+}
+
+
+
+# Streaming response from jina deepsearch
+stream_jina_completion() {
+  curl -N https://deepsearch.jina.ai/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer jina_da9bdf9404234a578e8ae3cbfb4ac56fy-pWoUZQkt5zPwmYPoKbM9y3oB6o" \
+    -d @- <<EOF |
+  {
+    "model": "jina-deepsearch-v1",
+    "messages": [
+        {
+            "role": "user",
+            "content": "Hi!"
+        },
+        {
+            "role": "assistant",
+            "content": "Hi, how can I help you?"
+        },
+        {
+            "role": "user",
+            "content": "what's the latest blog post from jina ai?"
+        }
+    ],
+    "stream": true,
+    "reasoning_effort": "medium",
+    "team_size": 2,
+    "max_attempts": 2
+  }
+EOF
+    grep '^data: ' | \
+    sed 's/^data: //' | \
+    jq --unbuffered -rj '.choices[0].delta.content // ""'
+  echo
+}
+
+
+
+fmt_demo() {
+echo "6. fmt - Simple optimal text formatter"
+  echo "   (Formats plain text paragraphs to a specified width, default 75 characters)"
+  echo "   This formats a long, unformatted paragraph."
+  local unformatted_text="Long lines of text can be hard to read on narrow terminals. The fmt command can help by reformatting paragraphs to a specified width, making them more comfortable for human eyes to process. It's a simple, yet effective tool for basic text manipulation and presentation, right from the command line."
+  echo "  Formatted text (default width):"
+  echo "$unformatted_text" | fmt
+  echo ""
+  cd - >/dev/null || return # Go back to original directory or return on error
+  echo "--- Demo Complete ---"
+}
+
+
+
+look_demo() {
+echo "3. look - Display lines beginning with a string"            
+  echo "   (Requires a sorted word list, typically /usr/share/dict/words)"                            
+  echo "   This tries to find words starting with uni from the system dictionary."
+  if [ -f "/usr/share/dict/words" ]; then
+    echo "  Words starting with uni (first 5 lines):"
+    look uni /usr/share/dict/words | head -n 5 || echo "  (No words found or look command failed. Is /usr/share/dict/words accessible?)"
+  else
+    echo "  /usr/share/dict/words not found. Creating a small example file for look."
+    echo -e "apple
+banana
+orange
+unicorn
+united
+unix
+zebra" | sort > mywords.txt
+    echo "  Words starting with uni from mywords.txt:"
+    look uni mywords.txt
+    rm mywords.txt
+  fi
+}
+
+
+# Pelican SVG Test
+pelican_test () {
+consortia=("test-consortium" "claude-4-sonnet" "claude-4-opus")
+declare -A consortium_files
+max_parallel=4
+sem() { while [ $(jobs | wc -l) -ge $max_parallel ]; do sleep 1; done; }
+i=1
+for cons in "${consortia[@]}"; do
+  for v in 1 2 3; do
+    outfile="pelican-consortium-${cons}-v${v}.svg"
+    (echo "[$i/$((3*${#consortia[@]}))] Running: $cons v$v" && llm -m "$cons" "SVG of a pelican riding a bicycle" -x > "$outfile" && consortium_files["$cons"]+="$outfile " && echo "Finished: $outfile") &
+    i=$((i+1))
+    sem
+  done
+done
+wait
+{
+  ls *.svg | awk 'BEGIN{print "<div style=\"display:grid;grid-template-columns:repeat(4,1fr);gap:10px;\">"} {print "<div style=\"border:1px solid #ccc;padding:8px;text-align:center\"><img src=\"" $1 "\" style=\"max-width:100px;height:auto;\"><br>" $1 "</div>"} END{print "</div>"}' > pelican-consortium-grid.html
+}
+echo "All SVGs generated. Open pelican-consortium-grid.html in your browser."
+firefox pelican-consortium-grid.html
+}
+
+# SVG Pelican consortium test 2
+svg_pelican_consotium () {
+consortia=("allmodels-flash25think-9x3" "allmodels-flash25think-9x2" "allmodels-flash2-9x2" "allmodels-flash2-9x3" "allmodels-9x3" "allmodels-9x2")
+declare -A consortium_files
+max_parallel=4
+sem() { while [ $(jobs | wc -l) -ge $max_parallel ]; do sleep 1; done; }
+i=1
+for cons in "${consortia[@]}"; do
+  for v in 1 2 3; do
+    outfile="pelican-consortium-${cons}-v${v}.svg"
+    (echo "[$i/$((3*${#consortia[@]}))] Running: $cons v$v" && llm -m "$cons" "SVG of a pelican riding a bicycle" -x > "$outfile" && consortium_files["$cons"]+="$outfile " && echo "Finished: $outfile") &
+    i=$((i+1))
+    sem
+  done
+done
+wait
+{
+  ls *.svg | awk 'BEGIN{print "<div style=\"display:grid;grid-template-columns:repeat(4,1fr);gap:10px;\">"} {print "<div style=\"border:1px solid #ccc;padding:8px;text-align:center\"><img src=\"" $1 "\" style=\"max-width:100px;height:auto;\"><br>" $1 "</div>"} END{print "</div>"}' > pelican-consortium-grid.html
+}
+echo "All SVGs generated. Open pelican-consortium-grid.html in your browser."
+firefox pelican-consortium-grid.html
+}
+
+# --- Shell Activity Logger ---
+# The shell activity logger is NOT enabled by default.
+# To enable, first ensure this script is sourced in your shell's startup file
+# (e.g., ~/.zshrc or ~/.bashrc).
+#
+# Then, add the following line to your startup file AFTER sourcing this script:
+#
+#   setup_shell_activity_logger
+#
+# To disable logging for the current session, you can run:
+#
+#   disable_shell_activity_logger
+#
+# This will set up the necessary hooks for both Zsh and Bash.
+#
+setup_shell_activity_logger() {
+  # Check if llm command exists
+  if ! command -v llm >/dev/null 2>&1; then
+    echo "Warning: llm command not found. Shell activity logging disabled." >&2
+    return 1
+  fi
+
+  # --- Configuration ---
+  _SHELL_ACTIVITY_DIARY_DIR="${HOME}/.zsh_shell_activity_diary"
+  mkdir -p "${_SHELL_ACTIVITY_DIARY_DIR}"
+  _SHELL_ACTIVITY_CID_FILE="${_SHELL_ACTIVITY_DIARY_DIR}/.note_shell_activity_cid"
+
+  # --- Initialization ---
+  if [[ ! -f "$_SHELL_ACTIVITY_CID_FILE" ]]; then
+    echo "Initializing note_shell_activity_cid..."
+    llm "$(uuidgen) - Only acknowledge receipt, say nothing else." > /dev/null 2>&1
+    _retrieved_cid=$(llm logs list -n 1 --json | jq -r '.[] | .conversation_id')
+    if [[ -n "$_retrieved_cid" && "$_retrieved_cid" != "null" ]]; then
+      echo "$_retrieved_cid" > "$_SHELL_ACTIVITY_CID_FILE"
+      note_shell_activity_cid="$_retrieved_cid"
+      echo "note_shell_activity_cid initialized and saved: $note_shell_activity_cid"
+    else
+      echo "Error: Could not retrieve conversation_id. Activity logging might be impacted." >&2
+      note_shell_activity_cid=""
+    fi
+  else
+    note_shell_activity_cid=$(cat "$_SHELL_ACTIVITY_CID_FILE")
+  fi
+
+  # Export variables for use by hook functions
+  export _SHELL_ACTIVITY_DIARY_DIR
+  export _SHELL_ACTIVITY_CID_FILE
+  export note_shell_activity_cid
+  
+  # Setup hooks for the current shell
+  if [[ -n "$ZSH_VERSION" ]]; then
+    # Setup for Zsh
+    autoload -Uz add-zsh-hook
+    add-zsh-hook preexec _log_shell_command_activity
+  elif [[ -n "$BASH_VERSION" ]]; then
+    # Setup for Bash
+    # Use a DEBUG trap to call the logger before a command is executed.
+    # PROMPT_COMMAND is used to get the command from history.
+    export PROMPT_COMMAND='_shell_activity_log_last_command'
+    trap '_log_shell_command_activity "$BASH_COMMAND"' DEBUG
+  fi
+}
+
+# Function to disable the shell activity logger for the current session.
+disable_shell_activity_logger() {
+  if [[ -n "$ZSH_VERSION" ]]; then
+    # Disable for Zsh
+    autoload -Uz add-zsh-hook
+    add-zsh-hook -d preexec _log_shell_command_activity
+    echo "Shell activity logger disabled for Zsh session."
+  elif [[ -n "$BASH_VERSION" ]]; then
+    # Disable for Bash
+    trap - DEBUG
+    # Unset PROMPT_COMMAND if it was only for the logger
+    if [[ "$PROMPT_COMMAND" == '_shell_activity_log_last_command' ]]; then
+      unset PROMPT_COMMAND
+    fi
+    echo "Shell activity logger disabled for Bash session."
+  else
+    echo "Unsupported shell. Could not disable activity logger." >&2
+    return 1
+  fi
+}
+
+# Helper for Bash to get the last command.
+_shell_activity_log_last_command() {
+  # In Bash, the DEBUG trap runs before the command is in history.
+  # We don't need to do anything here, but PROMPT_COMMAND is a common
+  # place to handle history-related tasks. The trap is sufficient.
+  return
+}
+
+# shellcheck disable=SC2317  # Function called indirectly via shell hooks
+note_shell_activity() {
+  # Ensure logger is set up. If not, run setup.
+  if [[ -z "$_SHELL_ACTIVITY_DIARY_DIR" || -z "$note_shell_activity_cid" ]]; then
+    # This will run if the script is sourced but setup wasn't run from .zshrc
+    # It might not set the hook for the current session, but will for subsequent commands.
+    setup_shell_activity_logger
+    # If still not set, exit to prevent errors.
+    if [[ -z "$_SHELL_ACTIVITY_DIARY_DIR" || -z "$note_shell_activity_cid" ]]; then
+        echo "Error: Shell activity logger setup failed. Cannot log command." >&2
+        return 1
+    fi
+  fi
+
+  local shell_command_input="$1"
+  local daily_log_file="${_SHELL_ACTIVITY_DIARY_DIR}/$(date +%Y-%m-%d).log"
+  local error_log_file="${_SHELL_ACTIVITY_DIARY_DIR}/errors.log"
+  local system_prompt="<MACHINE_NAME>Zsh Command Activity Logger</MACHINE_NAME>
+<MACHINE_DESCRIPTION>
+It interprets Zsh commands to generate brief diary entries.
+</MACHINE_DESCRIPTION>
+<CORE_FUNCTION>
+It will receive a Zsh command. Its task is to generate a concise diary-style entry (1-2 sentences, <20 words) summarizing the user's likely activity. If the command is too generic for a meaningful entry after initial filtering, respond with only a hyphen '-'. Focus solely on the diary entry or the hyphen.
+</CORE_FUNCTION>
+Keep responses brief and directly usable as a diary line."
+
+  (
+    local llm_output
+    if [[ -z "$note_shell_activity_cid" ]]; then
+      echo "Error: note_shell_activity_cid is not set. Cannot log activity." >>"$error_log_file"
+      return 1
+    fi
+    llm_output=$(llm --system "$system_prompt" -c --cid "$note_shell_activity_cid" "$shell_command_input" -m gemini-flash-lite 2>>"$error_log_file")
+    local llm_exit_status=$?
+    if (( llm_exit_status == 0 )) && [[ -n "$llm_output" && "$llm_output" != "-" ]]; then
+      echo "$(date +'%Y-%m-%d %H:%M:%S') $llm_output" >> "$daily_log_file"
+    fi
+  ) &
+}
+
+# shellcheck disable=SC2317  # Function called indirectly via shell hooks
+_log_shell_command_activity() {
+  local command_line="$1"
+  if [[ "$command_line" =~ ^(ls|cd|pwd|history|clear|exit|bg|fg|jobs|top|htop|man|which|cat|less|tail|head|mv|cp|rm|mkdir|touch|vim|nvim|v|n|\.?/note_shell_activity)( |$) ]] || \
+     [[ "$command_line" =~ ^llm ]]; then
+    return 0
+  fi
+  note_shell_activity "$command_line"
+}
+
+# Function to manually test the logger
+test_shell_activity_logger() {
+  echo "Testing shell activity logger..."
+  if [[ -z "$_SHELL_ACTIVITY_DIARY_DIR" ]]; then
+    echo "Error: Shell activity logger not set up. Run setup_shell_activity_logger first." >&2
+    return 1
+  fi
+  
+  echo "Logging test command..."
+  note_shell_activity "echo 'test command for activity logging'"
+  sleep 2
+  
+  local today_log="${_SHELL_ACTIVITY_DIARY_DIR}/$(date +%Y-%m-%d).log"
+  if [[ -f "$today_log" ]]; then
+    echo "Success! Check your log file:"
+    echo "  $today_log"
+    echo "Latest entries:"
+    tail -n 3 "$today_log"
+  else
+    echo "No log file created. Check errors:"
+    local error_log="${_SHELL_ACTIVITY_DIARY_DIR}/errors.log"
+    if [[ -f "$error_log" ]]; then
+      tail -n 5 "$error_log"
+    fi
+  fi
+}
+
+setup_shell_activity_logger

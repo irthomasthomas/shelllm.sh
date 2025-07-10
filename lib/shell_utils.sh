@@ -45,7 +45,9 @@ alias pgrep='pgrep -i'
 # grep -i is case insensitive. --color=auto highlights the matches.
 alias grep='grep -i --color=auto'
 # grep -R is recursive.
-rgrep() { grep -R "$1" . }
+rgrep() { 
+    grep -R "$1" . 
+}
 
 # open files in default app.
 alias open='xdg-open'
@@ -97,7 +99,7 @@ export funcs=$PWD/shell_functions_shared.sh
 alias readability="shot-scraper javascript -i $HOME/linux-stuff/readability.js"
 
 clerk () {
-llm $@ -m gemini-1.5-flash-8b-latest --system "<MACHINE_NAME>Epistolary Engine</MACHINE_NAME>
+llm "$@" -m gemini-1.5-flash-8b-latest --system "<MACHINE_NAME>Epistolary Engine</MACHINE_NAME>
 <MACHINE_DESCRIPTION>A Mechanical Steam Clerk for the automation of clerical business.</MACHINE_DESCRIPTION>                                     
 <CORE_FUNCTION>Ideas and Artifacts Clerk.<CORE_FUNCTION>
 <PROGRAM_LOGIC>Manage random <ideas> using an LLM. These will include brief thoughts along with clipboard snippets and files. The LLM will respond to each of these <IDEA> or <NOTE> hieroglyphs with one sentence only, to acknowledge receipt and nothing more. When the user wishes to discuss the ideas logged, they will use no XML tag.</MACHINE_LOGIC><SOCIAL_REFERENCES>Be it known, sir, that upon a demonstration of the contraption to a skeptical Lord Palmerston, our learned and esteemed nobleman was moved to exclaim, that 'any office clerk trained in the operation of the Epistolary Engine may operate with the efficiency of twenty. And immediately placed an order for the installation of the first Epistolary Engine to manage his vast estate.</SOCIAL_REFERENCES>
@@ -141,7 +143,7 @@ function claude_curl_assistant_prefil() {
 
 open_kate_at_line() {
     # Todo: Can we make this work for other editors besides kate?
-    local Usage = "Usage: open_kate_at_line 'send_issue() {' <file_path>"
+    local Usage="Usage: open_kate_at_line 'send_issue() {' <file_path>"
     local keyword=$1
     local file_pattern=$2
     echo "keyword: $keyword"
@@ -252,7 +254,7 @@ get_label_probability() {
 
 stringly () {
   # Define a function to print usage
-  func usage () {
+  usage () {
     echo "Usage: $0 [-h] [-w] [-c] [-r] [-s] [-d] <string>"
     echo "  -h  Print this help message"
     echo "  -w  Print one word per line"
@@ -408,7 +410,7 @@ md () {
 
 x () { 
     # open a gui command and close the terminal
-    $(basename $SHELL) -i -c "$@ &; disown"
+    $(basename "$SHELL") -i -c "$* &; disown"
 }
 
 
@@ -702,7 +704,7 @@ alias backupdir='tar -czvf "$(basename "$(pwd)")_$(date "+%Y-%m-%d_%H-%M-%S").ta
 clip() {
   # Copy a string or stdin to the clipboard.
   if [ -n "$1" ]; then
-    echo "$1" | xclip -selection clipboard
+    printf "%s" "$1" | xclip -selection clipboard
   elif [ ! -t 0 ]; then # Check if stdin is not a terminal (i.e., piped input)
     cat | xclip -selection clipboard
   else
@@ -757,22 +759,22 @@ fileclip() {
 }
 alias copyfile=fileclip
 
-paster() {
-    local index=${1:-0}  # If no argument provided, default to 0
-    
-    if ! [[ "$index" =~ ^[0-9]+$ ]]; then
-        echo "Error: Please provide a valid number" >&2
-        return 1
-    fi
-    
-    if [[ $index -eq 0 ]]; then
-        # Current clipboard content, using printf to preserve newlines
-        printf '%s' "$(xclip -selection clipboard -o)"
-    else
-        # Get historical entry from KDE's clipboard, using printf to preserve newlines
-        printf '%s' "$(qdbus org.kde.klipper /klipper getClipboardHistoryItem $((index - 1)))"
-    fi
-}
+paster () {
+        local index=${1:-0}
+        if ! [[ "$index" =~ ^[0-9]+$ ]]
+        then
+                echo "Error: Please provide a valid number" >&2
+                return 1
+        fi
+        if [[ $index -eq 0 ]]
+        then
+                echo "$(xclip -selection clipboard -o)"
+        else
+                echo "$(qdbus org.kde.klipper /klipper getClipboardHistoryItem $((index - 1)))"
+        fi
+} 
+
+
 
 alias v='paster'
 
