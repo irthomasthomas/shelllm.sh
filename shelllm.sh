@@ -120,7 +120,7 @@ task_plan_generator() {
 
 shelp () {
   local info="$(uname -a)" 
-  local system_prompt="$(which shelp)\n\n$info"
+  local system_prompt="\n<SYSTEM>\n$(which shelp)\n\n$info\n</SYSTEM>\n"
   local thinking=false 
   local args=() 
   local raw=false
@@ -180,26 +180,30 @@ shelp () {
   if [ "$thinking" = true ]; then
     local cot_llm_args=()
     [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
-    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}") 
+    prompt="$(echo -e "$system_prompt\n\n$piped_content")"
+    reasoning=$(echo -e "$prompt" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}")
     if [[ -n "$reasoning" ]]; then
-      system_prompt+="<thinking>$reasoning</thinking>" 
+      system_prompt+="<thoughts>\n$reasoning\n</thoughts>" 
     else
       echo "Error: No reasoning provided" >&2
       return 1
     fi
   fi
-  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n" 
   response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}") 
   if [ "$raw" = true ]; then
     echo "$response"
     return
   fi
-  # Uses the FIRST code block only and discards everything else.
-  shelllm_commands="$(echo -E "$response" | awk 'BEGIN{RS="```zsh"} NR==2' | awk 'BEGIN{RS="```"} NR==1'  | sed '/^ *#/d;/^$/d')" 
+  # Extract Zsh or Bash code block (prefer zsh, fallback to bash, then generic)
+  shelllm_commands=""
+  for lang in zsh bash ''; do
+    shelllm_commands="$(echo -E "$response" | awk "BEGIN{RS=\"\`\`\`$lang\"} NR==2" | awk "BEGIN{RS=\"\`\`\`\"} NR==1" | sed '/^ *#/d;/^$/d')"
+    [[ -n "$shelllm_commands" ]] && break
+  done
   # if shelllm_commands is empty, display the response
   if [[ -z "$shelllm_commands" ]]; then
     if [[ -n "$response" ]]; then
-      echo "Warning: Could not extract Zsh command from LLM response." >&2
+      echo "Warning: Could not extract Zsh or Bash command from LLM response." >&2
       echo "Raw LLM response:" >&2
       echo "$response" >&2
     else
@@ -729,7 +733,7 @@ structured_chain_of_thought() {
   #   --steps=STEPS          Define custom reasoning steps (comma-separated)
   #   --raw                  Return the raw LLM response
   
-  local system_prompt="You are a reasoning assistant that helps break down complex problems through structured thinking. Follow these steps meticulously:
+  local system_prompt="You are a reasoning assistant that helps break down complex problems through structured thinking. Your COT reasoning trace is then passed to another LLM to generate the actual answer. Follow these steps meticulously:
 
 1.  **Problem Understanding**:
     *   Restate the problem in your own words to confirm understanding.
@@ -744,8 +748,9 @@ structured_chain_of_thought() {
     *   *Example*: \"Step 1: [Action]. Step 2: [Calculation].\"
     *   Highlight assumptions and potential pitfalls.
 4.  **Alternative Perspectives**:
-    *   Propose 2-3 distinct approaches or critiques of your main method.
+    *   Propose 1-2 distinct approaches or critiques of your main method.
     *   *Example*: \"Alternative 1: Use [method X] for better accuracy. Con: Requires more time.\"
+    *   *Example*: \"Critique: The main approach may overlook [aspect Y].\"
 
 **Formatting Rules**:
 
@@ -760,11 +765,8 @@ structured_chain_of_thought() {
 **Important Notes**: DO NOT write a final answer or conclusion. Your task is to provide a structured breakdown of the problem and reasoning process. The final answer will be generated separately.
 "
 
-  local thinking_level="none"
   local args=()
-  local model=""
   local raw=false
-  local custom_steps=""
 
   # Check if input is being piped
   if [ ! -t 0 ]; then
@@ -795,13 +797,6 @@ structured_chain_of_thought() {
     shift
   done
 
-#   system_prompt+="
-# <SYSTEM_PROMPT>
-# Ensure that your main answer follows this format exactly:
-# $system_prompt
-# </SYSTEM_PROMPT>
-# "  
-  # Call LLM
   response=$(echo -e "$piped_content" | llm -s $system_prompt --no-stream "${args[@]}")
   
   # Return raw response if requested
@@ -1517,8 +1512,8 @@ setup_shell_activity_logger() {
   # --- Initialization ---
   if [[ ! -f "$_SHELL_ACTIVITY_CID_FILE" ]]; then
     echo "Initializing note_shell_activity_cid..."
-    llm "$(uuidgen) - Only acknowledge receipt, say nothing else." > /dev/null 2>&1
-    _retrieved_cid=$(llm logs list -n 1 --json | jq -r '.[] | .conversation_id')
+    llm -d /home/thomas/.config/io.datasette.llm/terminal.db "$(uuidgen) - Only acknowledge receipt, say nothing else." > /dev/null 2>&1
+    _retrieved_cid=$(llm logs list -d /home/thomas/.config/io.datasette.llm/terminal.db -n 1 --json | jq -r '.[] | .conversation_id')
     if [[ -n "$_retrieved_cid" && "$_retrieved_cid" != "null" ]]; then
       echo "$_retrieved_cid" > "$_SHELL_ACTIVITY_CID_FILE"
       note_shell_activity_cid="$_retrieved_cid"
@@ -1611,7 +1606,7 @@ Keep responses brief and directly usable as a diary line."
       echo "Error: note_shell_activity_cid is not set. Cannot log activity." >>"$error_log_file"
       return 1
     fi
-    llm_output=$(llm --system "$system_prompt" -c --cid "$note_shell_activity_cid" "$shell_command_input" -m gemini-flash-lite 2>>"$error_log_file")
+    llm_output=$(llm -d /home/thomas/.config/io.datasette.llm/terminal.db --system "$system_prompt" -c --cid "$note_shell_activity_cid" "$shell_command_input" -m gemini-flash-lite 2>>"$error_log_file")
     local llm_exit_status=$?
     if (( llm_exit_status == 0 )) && [[ -n "$llm_output" && "$llm_output" != "-" ]]; then
       echo "$(date +'%Y-%m-%d %H:%M:%S') $llm_output" >> "$daily_log_file"
@@ -1622,38 +1617,11 @@ Keep responses brief and directly usable as a diary line."
 # shellcheck disable=SC2317  # Function called indirectly via shell hooks
 _log_shell_command_activity() {
   local command_line="$1"
-  if [[ "$command_line" =~ ^(ls|cd|pwd|history|clear|exit|bg|fg|jobs|top|htop|man|which|cat|less|tail|head|mv|cp|rm|mkdir|touch|vim|nvim|v|n|\.?/note_shell_activity)( |$) ]] || \
+  if [[ "$command_line" =~ ^(bd|ls|cd|pwd|history|clear|exit|bg|fg|jobs|top|htop|man|which|cat|less|tail|head|mv|cp|rm|mkdir|touch|vim|nvim|v|n|\.?/note_shell_activity)( |$) ]] || \
      [[ "$command_line" =~ ^llm ]]; then
     return 0
   fi
   note_shell_activity "$command_line"
-}
-
-# Function to manually test the logger
-test_shell_activity_logger() {
-  echo "Testing shell activity logger..."
-  if [[ -z "$_SHELL_ACTIVITY_DIARY_DIR" ]]; then
-    echo "Error: Shell activity logger not set up. Run setup_shell_activity_logger first." >&2
-    return 1
-  fi
-  
-  echo "Logging test command..."
-  note_shell_activity "echo 'test command for activity logging'"
-  sleep 2
-  
-  local today_log="${_SHELL_ACTIVITY_DIARY_DIR}/$(date +%Y-%m-%d).log"
-  if [[ -f "$today_log" ]]; then
-    echo "Success! Check your log file:"
-    echo "  $today_log"
-    echo "Latest entries:"
-    tail -n 3 "$today_log"
-  else
-    echo "No log file created. Check errors:"
-    local error_log="${_SHELL_ACTIVITY_DIARY_DIR}/errors.log"
-    if [[ -f "$error_log" ]]; then
-      tail -n 5 "$error_log"
-    fi
-  fi
 }
 
 setup_shell_activity_logger

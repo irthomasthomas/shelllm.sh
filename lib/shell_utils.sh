@@ -1,6 +1,5 @@
 #!/bin/bash
 SCRIPT_DIR="$(dirname "$0")"
-echo "SCRIPT_DIR: $SCRIPT_DIR"
 
 alias f2p='files-to-prompt'
 
