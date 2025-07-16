@@ -25,6 +25,7 @@ script_dir="$(cd "$(dirname "$script_path")" && pwd)"
 cd "$script_dir"
 source "$script_dir/search_engineer.sh"
 source "$script_dir/code_refactor.sh"
+source "$script_dir/term_activity_logger.sh"
 cd "$original_dir"
 
 
@@ -118,7 +119,7 @@ task_plan_generator() {
   echo "$plan"
 }
 
-shelp () {
+shelp_i () {
   local info="$(uname -a)" 
   local system_prompt="\n<SYSTEM>\n$(which shelp)\n\n$info\n</SYSTEM>\n"
   local thinking=false 
@@ -221,6 +222,128 @@ shelp () {
     echo "$execution_output"
     # Save the output for a potential subsequent shelp call with -c
     echo "$execution_output" > "$state_file"
+  elif [ "$edit" = true ]; then
+    print -r -z "$shelllm_commands"
+  else
+    echo "$shelllm_commands"
+  fi
+}
+
+
+shelp () {
+  local exemplar="<EXAMPLE>
+Command to patch the file and resolve the \"unbound variable\" error.You are right, my apologies. The previous command was faulty. This command will correctly apply the required patch.
+\`\`\`bash
+sed -i '113s/AGENT_CONTROLLER_MODELS/&:-claude-4-sonnet,gemini-2.5-pro-or-ai-studio-no-reasoning/' /home/thomas/Projects/claude.sh/agent_k2_unified.sh
+\`\`\`
+</EXAMPLE>
+"
+
+  local exemplar_prompt="You are a shell command generation assistant. Your task is to generate a single shell command based on the user's request. You should not provide any additional text or explanations outside of the command itself. If you need to reason about the command, use the <thoughts> tag to provide your reasoning, but do not include it in the final command output.
+  ${exemplar}"
+  local info="$(uname -a)" 
+  local system_prompt="\n<SYSTEM>\n\n$info\n</SYSTEM>\n$exemplar_prompt\n\n\nWrite a single shell command to accomplish the following task:\n\n"
+  local thinking=false 
+  local args=() 
+  local raw=false
+  local execute=false
+  local edit=false
+  local continue_conversation=false
+  local state_file="/tmp/shelp_last_execution.log"
+  local piped_content=""
+  local think_model=""
+
+  if [ ! -t 0 ]; then
+    piped_content=$(cat) 
+  fi
+
+  # We need to parse args to check for -c before building the prompt
+  local temp_args=("$@")
+  for arg in "${temp_args[@]}"; do
+    if [[ "$arg" == "-c" ]]; then
+      continue_conversation=true
+      break
+    fi
+  done
+
+  # If -c is passed, check for and include the output of the last executed command
+  if [ "$continue_conversation" = true ] && [[ -f "$state_file" ]]; then
+    local last_execution_output
+    last_execution_output=$(cat "$state_file")
+    if [[ -n "$last_execution_output" ]]; then
+      piped_content+="$(printf "<LAST_COMMAND_OUTPUT>\n%s\n</LAST_COMMAND_OUTPUT>\n\n" "$last_execution_output")"
+    fi
+    
+    # Clear the state file after reading it to ensure it's only used once
+    true > "$state_file"
+  fi
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      (--think) thinking=true  ;;
+      (--raw) raw=true  ;;
+      (-x|--execute) execute=true  ;;
+      (-e|--edit) edit=true  ;;
+      (-tm|--thinking-model)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          think_model="$2"
+          thinking=true
+          shift
+        else
+          echo "Error: $1 requires a model name" >&2
+          return 1
+        fi
+        ;;
+      # -c is not a shelp-specific flag, so it's passed to llm via (*)
+      (*) args+=("$1")  ;;
+    esac
+    shift
+  done
+  if [ "$thinking" = true ]; then
+    local cot_llm_args=()
+    [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
+    prompt="$(echo -e "$system_prompt\n\n$piped_content")"
+    reasoning=$(echo -e "$prompt" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}")
+    if [[ -n "$reasoning" ]]; then
+      system_prompt+="<thoughts>\n$reasoning\n</thoughts>" 
+    else
+      echo "Error: No reasoning provided" >&2
+      return 1
+    fi
+  fi
+  response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}") 
+  if [ "$raw" = true ]; then
+    echo "$response"
+    return
+  fi
+  # Extract Zsh or Bash code block (prefer zsh, fallback to bash, then generic)
+  shelllm_commands=""
+  for lang in zsh bash ''; do
+    shelllm_commands="$(echo -E "$response" | awk "BEGIN{RS=\"\`\`\`$lang\"} NR==2" | awk "BEGIN{RS=\"\`\`\`\"} NR==1" | sed '/^ *#/d;/^$/d')"
+    [[ -n "$shelllm_commands" ]] && break
+  done
+  # if shelllm_commands is empty, display the response
+  if [[ -z "$shelllm_commands" ]]; then
+    if [[ -n "$response" ]]; then
+      error="Warning: Could not extract Zsh or Bash command from LLM response." 
+      echo "$error" >&2
+      echo "Raw LLM response:" >&2
+      echo "$response" >&2
+    else
+      echo "Error: LLM returned an empty response. No command to extract." >&2
+    fi
+    return 1 # Exit with error if no command was extracted
+  fi
+  
+  # Handle execution modes
+  if [ "$execute" = true ]; then
+    # Execute the command, capture its output/error, and display it
+    echo "$shelllm_commands"
+    local execution_output
+    execution_output=$(eval "$shelllm_commands" 2>&1)
+    echo "$execution_output"
+    # Save the output for a potential subsequent shelp call with -c
+    echo "$execution_output\n$error" > "$state_file"
   elif [ "$edit" = true ]; then
     print -r -z "$shelllm_commands"
   else
@@ -1481,147 +1604,3 @@ wait
 echo "All SVGs generated. Open pelican-consortium-grid.html in your browser."
 firefox pelican-consortium-grid.html
 }
-
-# --- Shell Activity Logger ---
-# The shell activity logger is NOT enabled by default.
-# To enable, first ensure this script is sourced in your shell's startup file
-# (e.g., ~/.zshrc or ~/.bashrc).
-#
-# Then, add the following line to your startup file AFTER sourcing this script:
-#
-#   setup_shell_activity_logger
-#
-# To disable logging for the current session, you can run:
-#
-#   disable_shell_activity_logger
-#
-# This will set up the necessary hooks for both Zsh and Bash.
-#
-setup_shell_activity_logger() {
-  # Check if llm command exists
-  if ! command -v llm >/dev/null 2>&1; then
-    echo "Warning: llm command not found. Shell activity logging disabled." >&2
-    return 1
-  fi
-
-  # --- Configuration ---
-  _SHELL_ACTIVITY_DIARY_DIR="${HOME}/.zsh_shell_activity_diary"
-  mkdir -p "${_SHELL_ACTIVITY_DIARY_DIR}"
-  _SHELL_ACTIVITY_CID_FILE="${_SHELL_ACTIVITY_DIARY_DIR}/.note_shell_activity_cid"
-
-  # --- Initialization ---
-  if [[ ! -f "$_SHELL_ACTIVITY_CID_FILE" ]]; then
-    echo "Initializing note_shell_activity_cid..."
-    llm -d /home/thomas/.config/io.datasette.llm/terminal.db "$(uuidgen) - Only acknowledge receipt, say nothing else." > /dev/null 2>&1
-    _retrieved_cid=$(llm logs list -d /home/thomas/.config/io.datasette.llm/terminal.db -n 1 --json | jq -r '.[] | .conversation_id')
-    if [[ -n "$_retrieved_cid" && "$_retrieved_cid" != "null" ]]; then
-      echo "$_retrieved_cid" > "$_SHELL_ACTIVITY_CID_FILE"
-      note_shell_activity_cid="$_retrieved_cid"
-      echo "note_shell_activity_cid initialized and saved: $note_shell_activity_cid"
-    else
-      echo "Error: Could not retrieve conversation_id. Activity logging might be impacted." >&2
-      note_shell_activity_cid=""
-    fi
-  else
-    note_shell_activity_cid=$(cat "$_SHELL_ACTIVITY_CID_FILE")
-  fi
-
-  # Export variables for use by hook functions
-  export _SHELL_ACTIVITY_DIARY_DIR
-  export _SHELL_ACTIVITY_CID_FILE
-  export note_shell_activity_cid
-  
-  # Setup hooks for the current shell
-  if [[ -n "$ZSH_VERSION" ]]; then
-    # Setup for Zsh
-    autoload -Uz add-zsh-hook
-    add-zsh-hook preexec _log_shell_command_activity
-  elif [[ -n "$BASH_VERSION" ]]; then
-    # Setup for Bash
-    # Use a DEBUG trap to call the logger before a command is executed.
-    # PROMPT_COMMAND is used to get the command from history.
-    export PROMPT_COMMAND='_shell_activity_log_last_command'
-    trap '_log_shell_command_activity "$BASH_COMMAND"' DEBUG
-  fi
-}
-
-# Function to disable the shell activity logger for the current session.
-disable_shell_activity_logger() {
-  if [[ -n "$ZSH_VERSION" ]]; then
-    # Disable for Zsh
-    autoload -Uz add-zsh-hook
-    add-zsh-hook -d preexec _log_shell_command_activity
-    echo "Shell activity logger disabled for Zsh session."
-  elif [[ -n "$BASH_VERSION" ]]; then
-    # Disable for Bash
-    trap - DEBUG
-    # Unset PROMPT_COMMAND if it was only for the logger
-    if [[ "$PROMPT_COMMAND" == '_shell_activity_log_last_command' ]]; then
-      unset PROMPT_COMMAND
-    fi
-    echo "Shell activity logger disabled for Bash session."
-  else
-    echo "Unsupported shell. Could not disable activity logger." >&2
-    return 1
-  fi
-}
-
-# Helper for Bash to get the last command.
-_shell_activity_log_last_command() {
-  # In Bash, the DEBUG trap runs before the command is in history.
-  # We don't need to do anything here, but PROMPT_COMMAND is a common
-  # place to handle history-related tasks. The trap is sufficient.
-  return
-}
-
-# shellcheck disable=SC2317  # Function called indirectly via shell hooks
-note_shell_activity() {
-  # Ensure logger is set up. If not, run setup.
-  if [[ -z "$_SHELL_ACTIVITY_DIARY_DIR" || -z "$note_shell_activity_cid" ]]; then
-    # This will run if the script is sourced but setup wasn't run from .zshrc
-    # It might not set the hook for the current session, but will for subsequent commands.
-    setup_shell_activity_logger
-    # If still not set, exit to prevent errors.
-    if [[ -z "$_SHELL_ACTIVITY_DIARY_DIR" || -z "$note_shell_activity_cid" ]]; then
-        echo "Error: Shell activity logger setup failed. Cannot log command." >&2
-        return 1
-    fi
-  fi
-
-  local shell_command_input="$1"
-  local daily_log_file="${_SHELL_ACTIVITY_DIARY_DIR}/$(date +%Y-%m-%d).log"
-  local error_log_file="${_SHELL_ACTIVITY_DIARY_DIR}/errors.log"
-  local system_prompt="<MACHINE_NAME>Zsh Command Activity Logger</MACHINE_NAME>
-<MACHINE_DESCRIPTION>
-It interprets Zsh commands to generate brief diary entries.
-</MACHINE_DESCRIPTION>
-<CORE_FUNCTION>
-It will receive a Zsh command. Its task is to generate a concise diary-style entry (1-2 sentences, <20 words) summarizing the user's likely activity. If the command is too generic for a meaningful entry after initial filtering, respond with only a hyphen '-'. Focus solely on the diary entry or the hyphen.
-</CORE_FUNCTION>
-Keep responses brief and directly usable as a diary line."
-
-  (
-    local llm_output
-    if [[ -z "$note_shell_activity_cid" ]]; then
-      echo "Error: note_shell_activity_cid is not set. Cannot log activity." >>"$error_log_file"
-      return 1
-    fi
-    llm_output=$(llm -d /home/thomas/.config/io.datasette.llm/terminal.db --system "$system_prompt" -c --cid "$note_shell_activity_cid" "$shell_command_input" -m gemini-flash-lite 2>>"$error_log_file")
-    local llm_exit_status=$?
-    if (( llm_exit_status == 0 )) && [[ -n "$llm_output" && "$llm_output" != "-" ]]; then
-      echo "$(date +'%Y-%m-%d %H:%M:%S') $llm_output" >> "$daily_log_file"
-    fi
-  ) &
-}
-
-# shellcheck disable=SC2317  # Function called indirectly via shell hooks
-_log_shell_command_activity() {
-  local command_line="$1"
-  if [[ "$command_line" =~ ^(bd|ls|cd|pwd|history|clear|exit|bg|fg|jobs|top|htop|man|which|cat|less|tail|head|mv|cp|rm|mkdir|touch|vim|nvim|v|n|\.?/note_shell_activity)( |$) ]] || \
-     [[ "$command_line" =~ ^llm ]]; then
-    return 0
-  fi
-  note_shell_activity "$command_line"
-}
-
-setup_shell_activity_logger
