@@ -983,3 +983,26 @@ pylight () { { [ -p /dev/stdin ] && cat - || echo "$@"; } | highlight --syntax=p
 f () {
 	fd -t f . | fzf --preview 'bat --style=plain --color=always {}'
 }
+
+# Load up sqlitebrowser windows.
+if [[ -z "$DB_LOADING" ]]; then
+  export DB_LOADING=1
+  (
+    flock -n 9 || exit 1
+    if [[ -z "$DB_LOADED" ]]; then
+    for db in terminal.db logs.db agent.db summary.db; do
+      lsof "/home/thomas/.config/io.datasette.llm/$db" | awk 'NR>1 {print $2}' | xargs -r kill -TERM
+    done
+    for i in {1..2}; do
+        for db in terminal.db logs.db agent.db summary.db; do
+          sh /home/thomas/user_tools/sqlitebrowser-llmdb-window.sh "$db"
+          sleep 0.5
+        done
+        wait
+      done
+      sleep 1
+      export DB_LOADED=1
+    fi
+  ) 9>/tmp/sqlitebrowser-lock
+  unset DB_LOADING
+fi

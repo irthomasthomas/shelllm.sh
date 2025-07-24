@@ -231,15 +231,23 @@ shelp_i () {
 
 
 shelp () {
-  local exemplar="<EXAMPLE>
-Command to patch the file and resolve the \"unbound variable\" error.You are right, my apologies. The previous command was faulty. This command will correctly apply the required patch.
+  local exemplar
+  read -r -d '' exemplar <<EOF
+<EXAMPLE>
+Command to patch the file and resolve the "unbound variable" error.
 \`\`\`bash
-sed -i '113s/AGENT_CONTROLLER_MODELS/&:-claude-4-sonnet,gemini-2.5-pro-or-ai-studio-no-reasoning/' /home/thomas/Projects/claude.sh/agent_k2_unified.sh
+sed -i '113s/AGENT_CONTROLLER_MODELS/&:-claude-4-sonnet,gemini-2.5-pro-or-ai-studio-no-reasoning/' "\$HOME/Projects/mytools.sh"
 \`\`\`
 </EXAMPLE>
-"
+<EXAMPLE>
+Command to eficiently search for a specific string in a file.
+\`\`\`bash
+grep -i 'search_string' /path/to/file.txt
+\`\`\`
+</EXAMPLE>
+EOF
 
-  local exemplar_prompt="You are a shell command generation assistant. Your task is to generate a single shell command based on the user's request. You should not provide any additional text or explanations outside of the command itself. If you need to reason about the command, use the <thoughts> tag to provide your reasoning, but do not include it in the final command output.
+  local exemplar_prompt="You are a shell command generation assistant. Your task is to generate a single shell command based on the user's request. You should not provide any additional text or explanations outside of the command itself. If you need to reason about the request, use the <thoughts> tag to provide your reasoning, but do not include it in the final command output.
   ${exemplar}"
   local info="$(uname -a)" 
   local system_prompt="\n<SYSTEM>\n\n$info\n</SYSTEM>\n$exemplar_prompt\n\n\nWrite a single shell command to accomplish the following task:\n\n"
@@ -746,7 +754,7 @@ taste++ () {
 
 prompt_engineer() {
   # Helps craft and refine LLM prompts with suggestions for improvements.
-   local system_prompt="You are a prompt engineering expert. Your task is to analyze the given prompt and suggest improvements to make it more effective for LLMs.
+  local system_prompt="You are a prompt engineering expert. Your task is to analyze the given prompt and suggest improvements to make it more effective for LLMs.
 
   Follow these steps:
   1. Analyze the provided prompt's structure, clarity, and specificity
@@ -764,32 +772,44 @@ prompt_engineer() {
   <refined_prompt>
     Your improved version of the prompt
   </refined_prompt>"
-  local thinking_level="none"
+  local thinking=false
+  local think_model=""
   local args=()
-  local model=""
   local raw=false
+  local piped_content=""
+  local refined_only=false
 
-  if [ ! -t 0 ]; then #
-    local piped_content
+  # Check for piped input
+  if [ ! -t 0 ]; then
     piped_content=$(cat)
   fi
+
+  # Parse arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --thinking=*)
-        thinking_level=${1#*=}
+      (--think) thinking=true ;;
+      (-tm|--thinking-model)
+        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+          think_model="$2"
+          thinking=true
+          shift
+        else
+          echo "Error: $1 requires a model name" >&2
+          return 1
+        fi
         ;;
-      --raw)
-        raw=true
-        ;;
-      *)
-        args+=("$1")
-        ;;
+      (--raw) raw=true ;;
+      (--refined-only) refined_only=true ;;
+      (*) args+=("$1") ;;
     esac
     shift
   done
-  
-  if [ "$thinking_level" != "none" ]; then
-    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}")
+
+  # If thinking enabled, run structured_chain_of_thought
+  if [ "$thinking" = true ]; then
+    local cot_llm_args=()
+    [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
+    reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}")
     if [[ -n "$reasoning" ]]; then
       system_prompt+="<thinking>$reasoning</thinking>"
     else
@@ -797,6 +817,7 @@ prompt_engineer() {
       return 1
     fi
   fi
+
   system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
 
   response=$(echo -e "$system_prompt\n\n$piped_content\n\n$system_prompt" | llm --no-stream "${args[@]}")
@@ -805,23 +826,23 @@ prompt_engineer() {
     echo "$response"
     return
   fi
-  if [ "$thinking_level" != "none" ]; then
-    thinking="$(echo "$response" | awk 'BEGIN{RS="<think>"} NR==2' | awk 'BEGIN{RS="</think>"} NR==1')"
-  fi
+
   # Extract sections
   analysis="$(echo "$response" | awk 'BEGIN{RS="<analysis>"} NR==2' | awk 'BEGIN{RS="</analysis>"} NR==1')"
   improvements="$(echo "$response" | awk 'BEGIN{RS="<improvements>"} NR==2' | awk 'BEGIN{RS="</improvements>"} NR==1')"
   refined_prompt="$(echo "$response" | awk 'BEGIN{RS="<refined_prompt>"} NR==2' | awk 'BEGIN{RS="</refined_prompt>"} NR==1')"
-  # check if analysis is empty
-  if [[ -z "$analysis" && -z "$refined_prompt" ]]; then
-    echo "Warning: Could not extract analysis or refined prompt. Displaying raw response:" >&2
-    echo "$response"
-    return 1
+
+  # Option to return only the refined prompt
+  if [ "$refined_only" = true ]; then
+    echo "$refined_prompt"
+    return
   fi
+
   # Display formatted output
-  if [ "$thinking_level" != "none" ]; then
-    if [[ -n "$thinking" ]]; then
-      echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking\n"
+  if [ "$thinking" = true ]; then
+    thinking_block="$(echo "$response" | awk 'BEGIN{RS="<thinking>"} NR==2' | awk 'BEGIN{RS="</thinking>"} NR==1')"
+    if [[ -n "$thinking_block" ]]; then
+      echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking_block\n"
     fi
   fi
   if [[ -n "$analysis" ]]; then
@@ -831,7 +852,7 @@ prompt_engineer() {
     echo -e "\033[1;35mIMPROVEMENTS:\033[0m"
     count=1
     while IFS= read -r line; do
-      trimmed_line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//') # Trim leading and trailing whitespace
+      trimmed_line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
       if [[ -n "$trimmed_line" ]]; then
         echo "$count. $trimmed_line"
         ((count++))
@@ -841,6 +862,12 @@ prompt_engineer() {
   fi
   if [[ -n "$refined_prompt" ]]; then
     echo -e "\033[1;32mREFINED PROMPT:\033[0m\n$refined_prompt"
+  fi
+  # If nothing extracted, show raw response
+  if [[ -z "$analysis" && -z "$refined_prompt" ]]; then
+    echo "Warning: Could not extract analysis or refined prompt. Displaying raw response:" >&2
+    echo "$response"
+    return 1
   fi
 }
 
