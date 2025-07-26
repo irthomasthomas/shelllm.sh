@@ -29,7 +29,6 @@ source "$script_dir/term_activity_logger.sh"
 cd "$original_dir"
 
 
-
 task_plan_generator() {
   # Generates a task plan based on user input.
   # Usage: task_plan_generator <task description> [--thinking=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--note=NOTE|-n NOTE]
@@ -119,120 +118,8 @@ task_plan_generator() {
   echo "$plan"
 }
 
-shelp_i () {
-  local info="$(uname -a)" 
-  local system_prompt="\n<SYSTEM>\n$(which shelp)\n\n$info\n</SYSTEM>\n"
-  local thinking=false 
-  local args=() 
-  local raw=false
-  local execute=false
-  local edit=false
-  local continue_conversation=false
-  local state_file="/tmp/shelp_last_execution.log"
-  local piped_content=""
-  local think_model=""
-
-  if [ ! -t 0 ]; then
-    piped_content=$(cat) 
-  fi
-
-  # We need to parse args to check for -c before building the prompt
-  local temp_args=("$@")
-  for arg in "${temp_args[@]}"; do
-    if [[ "$arg" == "-c" ]]; then
-      continue_conversation=true
-      break
-    fi
-  done
-
-  # If -c is passed, check for and include the output of the last executed command
-  if [ "$continue_conversation" = true ] && [[ -f "$state_file" ]]; then
-    local last_execution_output
-    last_execution_output=$(cat "$state_file")
-    if [[ -n "$last_execution_output" ]]; then
-      piped_content+="$(printf "<LAST_COMMAND_OUTPUT>\n%s\n</LAST_COMMAND_OUTPUT>\n\n" "$last_execution_output")"
-    fi
-    
-    # Clear the state file after reading it to ensure it's only used once
-    true > "$state_file"
-  fi
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      (--think) thinking=true  ;;
-      (--raw) raw=true  ;;
-      (-x|--execute) execute=true  ;;
-      (-e|--edit) edit=true  ;;
-      (-tm|--thinking-model)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          think_model="$2"
-          thinking=true
-          shift
-        else
-          echo "Error: $1 requires a model name" >&2
-          return 1
-        fi
-        ;;
-      # -c is not a shelp-specific flag, so it's passed to llm via (*)
-      (*) args+=("$1")  ;;
-    esac
-    shift
-  done
-  if [ "$thinking" = true ]; then
-    local cot_llm_args=()
-    [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
-    prompt="$(echo -e "$system_prompt\n\n$piped_content")"
-    reasoning=$(echo -e "$prompt" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}")
-    if [[ -n "$reasoning" ]]; then
-      system_prompt+="<thoughts>\n$reasoning\n</thoughts>" 
-    else
-      echo "Error: No reasoning provided" >&2
-      return 1
-    fi
-  fi
-  response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}") 
-  if [ "$raw" = true ]; then
-    echo "$response"
-    return
-  fi
-  # Extract Zsh or Bash code block (prefer zsh, fallback to bash, then generic)
-  shelllm_commands=""
-  for lang in zsh bash ''; do
-    shelllm_commands="$(echo -E "$response" | awk "BEGIN{RS=\"\`\`\`$lang\"} NR==2" | awk "BEGIN{RS=\"\`\`\`\"} NR==1" | sed '/^ *#/d;/^$/d')"
-    [[ -n "$shelllm_commands" ]] && break
-  done
-  # if shelllm_commands is empty, display the response
-  if [[ -z "$shelllm_commands" ]]; then
-    if [[ -n "$response" ]]; then
-      echo "Warning: Could not extract Zsh or Bash command from LLM response." >&2
-      echo "Raw LLM response:" >&2
-      echo "$response" >&2
-    else
-      echo "Error: LLM returned an empty response. No command to extract." >&2
-    fi
-    return 1 # Exit with error if no command was extracted
-  fi
-  
-  # Handle execution modes
-  if [ "$execute" = true ]; then
-    # Execute the command, capture its output/error, and display it
-    echo "$shelllm_commands"
-    local execution_output
-    execution_output=$(eval "$shelllm_commands" 2>&1)
-    echo "$execution_output"
-    # Save the output for a potential subsequent shelp call with -c
-    echo "$execution_output" > "$state_file"
-  elif [ "$edit" = true ]; then
-    print -r -z "$shelllm_commands"
-  else
-    echo "$shelllm_commands"
-  fi
-}
-
-
-shelp () {
-  local exemplar
-  read -r -d '' exemplar <<EOF
+shelp_exemplar() {
+  read -r -d '' exemplar_prompt <<EOF
 <EXAMPLE>
 Command to patch the file and resolve the "unbound variable" error.
 \`\`\`bash
@@ -245,119 +132,149 @@ Command to eficiently search for a specific string in a file.
 grep -i 'search_string' /path/to/file.txt
 \`\`\`
 </EXAMPLE>
+
+You are a shell command generation assistant. 
+Your task is to generate a single shell command based on the user's request. 
+You should not provide any additional text or explanations outside of the command itself. 
+If you need to reason about the request, use the <thoughts> tag to provide your reasoning, but do not include it in the final command output.
 EOF
-
-  local exemplar_prompt="You are a shell command generation assistant. Your task is to generate a single shell command based on the user's request. You should not provide any additional text or explanations outside of the command itself. If you need to reason about the request, use the <thoughts> tag to provide your reasoning, but do not include it in the final command output.
-  ${exemplar}"
-  local info="$(uname -a)" 
-  local system_prompt="\n<SYSTEM>\n\n$info\n</SYSTEM>\n$exemplar_prompt\n\n\nWrite a single shell command to accomplish the following task:\n\n"
-  local thinking=false 
-  local args=() 
-  local raw=false
-  local execute=false
-  local edit=false
-  local continue_conversation=false
-  local state_file="/tmp/shelp_last_execution.log"
-  local piped_content=""
-  local think_model=""
-
-  if [ ! -t 0 ]; then
-    piped_content=$(cat) 
-  fi
-
-  # We need to parse args to check for -c before building the prompt
-  local temp_args=("$@")
-  for arg in "${temp_args[@]}"; do
-    if [[ "$arg" == "-c" ]]; then
-      continue_conversation=true
-      break
-    fi
-  done
-
-  # If -c is passed, check for and include the output of the last executed command
-  if [ "$continue_conversation" = true ] && [[ -f "$state_file" ]]; then
-    local last_execution_output
-    last_execution_output=$(cat "$state_file")
-    if [[ -n "$last_execution_output" ]]; then
-      piped_content+="$(printf "<LAST_COMMAND_OUTPUT>\n%s\n</LAST_COMMAND_OUTPUT>\n\n" "$last_execution_output")"
-    fi
-    
-    # Clear the state file after reading it to ensure it's only used once
-    true > "$state_file"
-  fi
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      (--think) thinking=true  ;;
-      (--raw) raw=true  ;;
-      (-x|--execute) execute=true  ;;
-      (-e|--edit) edit=true  ;;
-      (-tm|--thinking-model)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          think_model="$2"
-          thinking=true
-          shift
-        else
-          echo "Error: $1 requires a model name" >&2
-          return 1
-        fi
-        ;;
-      # -c is not a shelp-specific flag, so it's passed to llm via (*)
-      (*) args+=("$1")  ;;
-    esac
-    shift
-  done
-  if [ "$thinking" = true ]; then
-    local cot_llm_args=()
-    [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
-    prompt="$(echo -e "$system_prompt\n\n$piped_content")"
-    reasoning=$(echo -e "$prompt" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}")
-    if [[ -n "$reasoning" ]]; then
-      system_prompt+="<thoughts>\n$reasoning\n</thoughts>" 
-    else
-      echo "Error: No reasoning provided" >&2
-      return 1
-    fi
-  fi
-  response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}") 
-  if [ "$raw" = true ]; then
-    echo "$response"
-    return
-  fi
-  # Extract Zsh or Bash code block (prefer zsh, fallback to bash, then generic)
-  shelllm_commands=""
-  for lang in zsh bash ''; do
-    shelllm_commands="$(echo -E "$response" | awk "BEGIN{RS=\"\`\`\`$lang\"} NR==2" | awk "BEGIN{RS=\"\`\`\`\"} NR==1" | sed '/^ *#/d;/^$/d')"
-    [[ -n "$shelllm_commands" ]] && break
-  done
-  # if shelllm_commands is empty, display the response
-  if [[ -z "$shelllm_commands" ]]; then
-    if [[ -n "$response" ]]; then
-      error="Warning: Could not extract Zsh or Bash command from LLM response." 
-      echo "$error" >&2
-      echo "Raw LLM response:" >&2
-      echo "$response" >&2
-    else
-      echo "Error: LLM returned an empty response. No command to extract." >&2
-    fi
-    return 1 # Exit with error if no command was extracted
-  fi
-  
-  # Handle execution modes
-  if [ "$execute" = true ]; then
-    # Execute the command, capture its output/error, and display it
-    echo "$shelllm_commands"
-    local execution_output
-    execution_output=$(eval "$shelllm_commands" 2>&1)
-    echo "$execution_output"
-    # Save the output for a potential subsequent shelp call with -c
-    echo "$execution_output\n$error" > "$state_file"
-  elif [ "$edit" = true ]; then
-    print -r -z "$shelllm_commands"
-  else
-    echo "$shelllm_commands"
-  fi
+  # Make the prompt available globally
+  export SHELP_EXEMPLAR_PROMPT="$exemplar_prompt"
 }
+
+# Initialize the exemplar prompt when script loads
+shelp_exemplar
+
+shelp() {
+    local info="$(uname -a)"
+    local system_prompt="\n<SYSTEM>\n\n$info\n</SYSTEM>\n$SHELP_EXEMPLAR_PROMPT\n\n\nWrite a single shell command to accomplish the following task:\n\n"
+    local thinking=false raw=false execute=false edit=false continue_conversation=false inception=false
+    local state_file="/tmp/shelp_last_execution.log"
+    local piped_content=""
+    local think_model=""
+    local args=()
+
+    # Handle piped input
+    if [ ! -t 0 ]; then
+        piped_content=$(cat)
+    fi
+
+    # Check if continuing conversation
+    local temp_args=("$@")
+    for arg in "${temp_args[@]}"; do
+        if [[ "$arg" == "-c" ]]; then
+            continue_conversation=true
+            break
+        fi
+    done
+
+    if [ "$continue_conversation" = true ] && [[ -f "$state_file" ]]; then
+        local last_execution_output
+        last_execution_output=$(cat "$state_file")
+        if [[ -n "$last_execution_output" ]]; then
+            piped_content+="$(printf "<LAST_COMMAND_OUTPUT>\n%s\n</LAST_COMMAND_OUTPUT>\n\n" "$last_execution_output")"
+        fi
+        true > "$state_file"
+    fi
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --think) thinking=true ;;
+            --raw) raw=true ;;
+            -x|--execute) execute=true ;;
+            -e|--edit) edit=true ;;
+            -i|--inception) inception=true ;;
+            -tm|--thinking-model)
+                if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+                    think_model="$2"
+                    thinking=true
+                    shift
+                else
+                    echo "Error: $1 requires a model name" >&2
+                    return 1
+                fi ;;
+            *) args+=("$1") ;;
+        esac
+        shift
+    done
+    
+    # If inception is enabled, add the exemplar prompt to the system prompt
+    [ "$inception" = true ] && system_prompt="$(which shelp)"
+
+    # Thinking step
+    if [ "$thinking" = true ]; then
+        local cot_llm_args=()
+        [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
+        prompt="$(echo -e "$system_prompt\n\n$piped_content")"
+        reasoning=$(echo -e "$prompt" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}")
+        if [[ -n "$reasoning" ]]; then
+            system_prompt+="<thoughts>\n$reasoning\n</thoughts>"
+        else
+            echo "Error: No reasoning provided" >&2
+            return 1
+        fi
+    fi
+
+    # Get LLM response
+    response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}")
+
+    if [ "$raw" = true ]; then
+        echo "$response"
+        return
+    fi
+
+    # Extract shell command
+    local shelllm_commands=""
+    for lang in zsh bash ''; do
+        shelllm_commands="$(echo -E "$response" | awk "BEGIN{RS=\"\`\`\`$lang\"} NR==2" | awk "BEGIN{RS=\"\`\`\`\"} NR==1" | sed '/^ *#/d;/^$/d')"
+        [[ -n "$shelllm_commands" ]] && break
+    done
+
+    if [[ -z "$shelllm_commands" ]]; then
+        if [[ -n "$response" ]]; then
+            error="Warning: Could not extract Zsh or Bash command from LLM response."
+            echo "$error" >&2
+            echo "Raw LLM response:" >&2
+            echo "$response" >&2
+        else
+            echo "Error: LLM returned an empty response. No command to extract." >&2
+        fi
+        return 1
+    fi
+    # Mode handling
+    if [ "$execute" = true ]; then
+      # Print command for visibility
+      echo "$shelllm_commands"
+
+      # Add command to history
+      if [[ -n "$ZSH_VERSION" ]]; then
+        # For Zsh
+        print -s "$shelllm_commands"
+      elif [[ -n "$BASH_VERSION" ]]; then
+        # For Bash
+        history -s "$shelllm_commands"
+      fi
+
+      # Execute the command, capture its output/error, and display it  
+      local execution_output
+      execution_output=$(eval "$shelllm_commands" 2>&1)
+      echo "$execution_output"
+      # Save the output for a potential subsequent shelp call with -c
+      echo "$execution_output" > "$state_file"
+    elif [ "$edit" = true ]; then
+      if [[ -n "$ZSH_VERSION" ]]; then
+        print -r -z "$shelllm_commands"
+      elif [[ -n "$BASH_VERSION" ]]; then
+        # In Bash, just print it for copy-paste
+        echo "$shelllm_commands"
+      fi
+    else
+      echo "$shelllm_commands"
+    fi
+}
+
+
 
 # Update aliases to use the new flags
 alias shelp-x='shelp --execute'
@@ -750,34 +667,36 @@ taste++ () {
   fi
   echo "$refined_text"
 }
-
-
 prompt_engineer() {
   # Helps craft and refine LLM prompts with suggestions for improvements.
   local system_prompt="You are a prompt engineering expert. Your task is to analyze the given prompt and suggest improvements to make it more effective for LLMs.
 
-  Follow these steps:
-  1. Analyze the provided prompt's structure, clarity, and specificity
-  2. Identify weaknesses, ambiguities, or areas that could cause misunderstanding
-  3. Suggest specific improvements with explanations
-  4. Provide a refined version of the prompt
+  Steps:
+  1. Analyze the provided prompt's structure, clarity, and specificity.
+  2. Identify weaknesses, ambiguities, or areas that could cause misunderstanding.
+  3. Suggest specific improvements with explanations.
+  4. Provide a refined version of the prompt.
 
-  Format your response with these XML tags:
-  <analysis>Your analysis of the prompt's strengths and weaknesses</analysis>
-  <improvements>
-    <item>First improvement suggestion with explanation</item>
-    <item>Second improvement suggestion with explanation</item>
-    ...
-  </improvements>
-  <refined_prompt>
-    Your improved version of the prompt
-  </refined_prompt>"
+  Format your response in markdown:
+  ## Analysis
+  Your analysis of the prompt's strengths and weaknesses.
+
+  ## Improvements
+  - First improvement suggestion with explanation
+  - Second improvement suggestion with explanation
+  - ...
+
+  ## Refined Prompt
+  \`\`\`
+  Your improved version of the prompt
+  \`\`\`
+  "
   local thinking=false
   local think_model=""
   local args=()
   local raw=false
   local piped_content=""
-  local refined_only=false
+  local show_analysis=false
 
   # Check for piped input
   if [ ! -t 0 ]; then
@@ -799,7 +718,7 @@ prompt_engineer() {
         fi
         ;;
       (--raw) raw=true ;;
-      (--refined-only) refined_only=true ;;
+      (--analysis) show_analysis=true ;;
       (*) args+=("$1") ;;
     esac
     shift
@@ -811,61 +730,59 @@ prompt_engineer() {
     [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
     reasoning=$(echo -e "$piped_content" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}")
     if [[ -n "$reasoning" ]]; then
-      system_prompt+="<thinking>$reasoning</thinking>"
+      system_prompt+="\n\n## Thinking\n$reasoning\n"
     else
       echo "Error: No reasoning provided" >&2
       return 1
     fi
   fi
 
-  system_prompt="\n<SYSTEM>\n$system_prompt\n</SYSTEM>\n"
+  system_prompt="\n$system_prompt\n"
 
-  response=$(echo -e "$system_prompt\n\n$piped_content\n\n$system_prompt" | llm --no-stream "${args[@]}")
+  response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}")
 
   if [ "$raw" = true ]; then
     echo "$response"
     return
   fi
 
-  # Extract sections
-  analysis="$(echo "$response" | awk 'BEGIN{RS="<analysis>"} NR==2' | awk 'BEGIN{RS="</analysis>"} NR==1')"
-  improvements="$(echo "$response" | awk 'BEGIN{RS="<improvements>"} NR==2' | awk 'BEGIN{RS="</improvements>"} NR==1')"
-  refined_prompt="$(echo "$response" | awk 'BEGIN{RS="<refined_prompt>"} NR==2' | awk 'BEGIN{RS="</refined_prompt>"} NR==1')"
+  # Extract sections using awk
+  analysis="$(echo "$response" | awk '/^## Analysis/{flag=1;next}/^## Improvements/{flag=0}flag' | sed '/^[[:space:]]*$/d')"
+  improvements="$(echo "$response" | awk '/^## Improvements/{flag=1;next}/^## Refined Prompt/{flag=0}flag' | sed '/^[[:space:]]*$/d')"
+  # Extract code block for refined prompt
+  code_block="$(echo "$response" | awk '/^## Refined Prompt/{flag=1}flag && /^```/{flag=2;next}flag==2 && !/^```/{print} /^```/ && flag==2{flag=0}')"
 
-  # Option to return only the refined prompt
-  if [ "$refined_only" = true ]; then
-    echo "$refined_prompt"
-    return
+  # Default: output only the refined prompt
+  if [ "$show_analysis" = false ]; then
+    if [[ -n "$code_block" ]]; then
+      echo "$code_block"
+      return
+    else
+      echo "Warning: Could not extract refined prompt code block. Displaying raw response:" >&2
+      echo "$response"
+      return 1
+    fi
   fi
 
-  # Display formatted output
+  # Display full analysis when requested
   if [ "$thinking" = true ]; then
-    thinking_block="$(echo "$response" | awk 'BEGIN{RS="<thinking>"} NR==2' | awk 'BEGIN{RS="</thinking>"} NR==1')"
+    thinking_block="$(echo "$response" | awk '/^## Thinking/{flag=1;next}/^## Analysis/{flag=0}flag' | sed '/^[[:space:]]*$/d')"
     if [[ -n "$thinking_block" ]]; then
-      echo -e "\033[1;34m🧠 Thinking Process:\033[0m\n$thinking_block\n"
+      echo -e "## Thinking\n$thinking_block\n"
     fi
   fi
   if [[ -n "$analysis" ]]; then
-    echo -e "\033[1;36mANALYSIS:\033[0m\n$analysis\n"
+    echo -e "## Analysis\n$analysis\n"
   fi
   if [[ -n "$improvements" ]]; then
-    echo -e "\033[1;35mIMPROVEMENTS:\033[0m"
-    count=1
-    while IFS= read -r line; do
-      trimmed_line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-      if [[ -n "$trimmed_line" ]]; then
-        echo "$count. $trimmed_line"
-        ((count++))
-      fi
-    done <<< "$improvements"
+    echo -e "## Improvements"
+    echo "$improvements"
     echo
   fi
-  if [[ -n "$refined_prompt" ]]; then
-    echo -e "\033[1;32mREFINED PROMPT:\033[0m\n$refined_prompt"
-  fi
-  # If nothing extracted, show raw response
-  if [[ -z "$analysis" && -z "$refined_prompt" ]]; then
-    echo "Warning: Could not extract analysis or refined prompt. Displaying raw response:" >&2
+  if [[ -n "$code_block" ]]; then
+    echo -e "## Refined Prompt\n\`\`\`\n$code_block\n\`\`\`"
+  else
+    echo "Warning: Could not extract refined prompt. Displaying raw response:" >&2
     echo "$response"
     return 1
   fi

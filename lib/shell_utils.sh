@@ -571,12 +571,13 @@ llm-rand () {
 alias llm-keys=term-keys
 
 
-terminator_help() {
+ask_terminator() {
     # Use llm man page template to generate help for terminator terminal.
     # Usage: terminator_help <request>
     # Example: terminator_help "How do I use the terminator terminal?"
-    llm -t terminatorsys "$1" -o temperature 0 -m 4t
+    llm -t terminatorsys -o temperature 0
 }
+
 alias th=terminator_help
 alias thx=term-keys
 
