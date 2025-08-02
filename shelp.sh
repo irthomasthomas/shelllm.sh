@@ -44,7 +44,7 @@ Write a single shell command to accomplish the following task:
 </TASK>
 EOF
 )
-    local thinking=false raw=false execute=false edit=false continue_conversation=false inception=false
+    local thinking=false raw=false execute=false edit=false continue_conversation=false include_last_output=false inception=false
     local state_file="/tmp/shelp_last_execution.log"
     local piped_content=""
     local think_model=""
@@ -59,6 +59,7 @@ EOF
     for arg in "${temp_args[@]}"; do
         case "$arg" in
             -c) continue_conversation=true ;;
+            -cf) continue_conversation=true; include_last_output=true ;;
             --think) thinking=true ;;
             --raw) raw=true ;;
             -x|--execute) execute=true ;;
@@ -80,14 +81,18 @@ EOF
     done
 
     # Handle continue_conversation after parsing
-    if [ "$continue_conversation" = true ] && [[ -f "$state_file" ]]; then
-        local last_execution_output
-        last_execution_output=$(cat "$state_file")
-        if [[ -n "$last_execution_output" ]]; then
-            piped_content+="$(printf "<LAST_COMMAND_OUTPUT>\n%s\n</LAST_COMMAND_OUTPUT>\n\n" "$last_execution_output")"
-        fi
-        true > "$state_file"
-    fi
+      if [ "$continue_conversation" = true ] && [[ -f "$state_file" ]]; then
+          local last_execution_output
+          last_execution_output=$(cat "$state_file")
+          if [[ -n "$last_execution_output" && "$include_last_output" = true ]]; then
+              piped_content+="$(printf "<LAST_COMMAND_OUTPUT>
+%s
+</LAST_COMMAND_OUTPUT>
+
+" "$last_execution_output")"
+          fi
+          true > "$state_file"
+      fi
 
     
     # If inception is enabled, add the exemplar prompt to the system prompt
@@ -106,9 +111,10 @@ EOF
             return 1
         fi
     fi
-
-    # Get LLM response
-    response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}")
+    
+    local continue_flag=""
+    [ "$continue_conversation" = true ] && continue_flag="-c"
+    response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}" $continue_flag)
 
     if [ "$raw" = true ]; then
         echo "$response"
