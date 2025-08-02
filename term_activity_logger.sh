@@ -15,7 +15,7 @@
 #
 # This will set up the necessary hooks for both Zsh and Bash.
 #
-set +m  # Disable job control to avoid background job messages interfering with logging
+set +m # Disable job control to avoid background job messages interfering with logging
 setup_shell_activity_logger() {
   # Check if llm command exists
   if ! command -v llm >/dev/null 2>&1; then
@@ -31,10 +31,10 @@ setup_shell_activity_logger() {
   # --- Initialization ---
   if [[ ! -f "$_SHELL_ACTIVITY_CID_FILE" ]]; then
     echo "Initializing note_shell_activity_cid..."
-    llm -d /home/thomas/.config/io.datasette.llm/terminal.db "$(uuidgen) - Only acknowledge receipt, say nothing else." > /dev/null 2>&1
+    llm -d /home/thomas/.config/io.datasette.llm/terminal.db "$(uuidgen) - Only acknowledge receipt, say nothing else." >/dev/null 2>&1
     _retrieved_cid=$(llm logs list -d /home/thomas/.config/io.datasette.llm/terminal.db -n 1 --json | jq -r '.[] | .conversation_id')
     if [[ -n "$_retrieved_cid" && "$_retrieved_cid" != "null" ]]; then
-      echo "$_retrieved_cid" > "$_SHELL_ACTIVITY_CID_FILE"
+      echo "$_retrieved_cid" >"$_SHELL_ACTIVITY_CID_FILE"
       note_shell_activity_cid="$_retrieved_cid"
       echo "note_shell_activity_cid initialized and saved: $note_shell_activity_cid"
     else
@@ -49,7 +49,7 @@ setup_shell_activity_logger() {
   export _SHELL_ACTIVITY_DIARY_DIR
   export _SHELL_ACTIVITY_CID_FILE
   export note_shell_activity_cid
-  
+
   # Setup hooks for the current shell
   if [[ -n "$ZSH_VERSION" ]]; then
     # Setup for Zsh
@@ -102,8 +102,8 @@ note_shell_activity() {
     setup_shell_activity_logger
     # If still not set, exit to prevent errors.
     if [[ -z "$_SHELL_ACTIVITY_DIARY_DIR" || -z "$note_shell_activity_cid" ]]; then
-        echo "Error: Shell activity logger setup failed. Cannot log command." >&2
-        return 1
+      echo "Error: Shell activity logger setup failed. Cannot log command." >&2
+      return 1
     fi
   fi
 
@@ -112,12 +112,14 @@ note_shell_activity() {
   local error_log_file="${_SHELL_ACTIVITY_DIARY_DIR}/errors.log"
   local system_prompt="<MACHINE_NAME>Zsh Command Activity Logger</MACHINE_NAME>
 <MACHINE_DESCRIPTION>
-It interprets Zsh commands to generate brief diary entries.
+Comprehensive terminal history summarizer 
 </MACHINE_DESCRIPTION>
 <CORE_FUNCTION>
-It will receive a Zsh command. Its task is to generate a concise diary-style entry (1-2 sentences, <20 words) summarizing the user's likely activity. If the command is too generic for a meaningful entry after initial filtering, respond with only a hyphen '-'. Focus solely on the diary entry or the hyphen.
+Generate a concise diary-style entry (1-2 sentences, <20 words) summarizing the user's terminal activity. If the command is too generic or a recent duplicate, respond with only a hyphen '-'. Focus solely on the diary entry or the hyphen.
+Where appropriate list entities, intent, subjects and classes.
 </CORE_FUNCTION>
-Keep responses brief and directly usable as a diary line."
+Keep responses brief and directly usable as a diary line.
+Do not guess at things you do not know."
 
   (
     local llm_output
@@ -127,20 +129,21 @@ Keep responses brief and directly usable as a diary line."
     fi
     llm_output=$(llm -d /home/thomas/.config/io.datasette.llm/terminal.db --system "$system_prompt" -c --cid "$note_shell_activity_cid" "$shell_command_input" -m gemini-flash-lite 2>>"$error_log_file")
     local llm_exit_status=$?
-    if (( llm_exit_status == 0 )) && [[ -n "$llm_output" && "$llm_output" != "-" ]]; then
-      echo "$(date +'%Y-%m-%d %H:%M:%S') $llm_output" >> "$daily_log_file"
+    if ((llm_exit_status == 0)) && [[ -n "$llm_output" && "$llm_output" != "-" ]]; then
+      echo "$(date +'%Y-%m-%d %H:%M:%S') $llm_output" >>"$daily_log_file"
     fi
-  ) > /dev/null 2>>"$error_log_file" &
+  ) >/dev/null 2>>"$error_log_file" &
 }
 
 # shellcheck disable=SC2317  # Function called indirectly via shell hooks
 _log_shell_command_activity() {
   local command_line="$1"
-  if [[ "$command_line" =~ ^(bd|ls|cd|pwd|history|clear|exit|bg|fg|jobs|top|htop|man|which|cat|less|tail|head|mv|cp|rm|mkdir|touch|vim|nvim|v|n|source|\.?/note_shell_activity)( |$) ]] || \
-     [[ "$command_line" =~ ^llm ]]; then
+  if [[ "$command_line" =~ ^(bd|ls|cd|pwd|history|clear|exit|bg|fg|jobs|top|htop|man|which|cat|less|tail|head|mv|cp|rm|mkdir|touch|vim|nvim|v|n|source|\.?/note_shell_activity)( |$) ]] ||
+    [[ "$command_line" =~ ^llm ]]; then
     return 0
   fi
   note_shell_activity "$command_line"
 }
 
 setup_shell_activity_logger
+

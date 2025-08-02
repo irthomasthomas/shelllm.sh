@@ -26,6 +26,8 @@ cd "$script_dir"
 source "$script_dir/search_engineer.sh"
 source "$script_dir/code_refactor.sh"
 source "$script_dir/term_activity_logger.sh"
+source "$script_dir/structured_chain_of_thought.sh"
+source "$script_dir/shelp.sh"
 cd "$original_dir"
 
 
@@ -117,170 +119,6 @@ task_plan_generator() {
   fi
   echo "$plan"
 }
-
-shelp_exemplar() {
-  read -r -d '' exemplar_prompt <<EOF
-<EXAMPLE>
-Command to patch the file and resolve the "unbound variable" error.
-\`\`\`bash
-sed -i '113s/AGENT_CONTROLLER_MODELS/&:-claude-4-sonnet,gemini-2.5-pro-or-ai-studio-no-reasoning/' "\$HOME/Projects/mytools.sh"
-\`\`\`
-</EXAMPLE>
-<EXAMPLE>
-Command to eficiently search for a specific string in a file.
-\`\`\`bash
-grep -i 'search_string' /path/to/file.txt
-\`\`\`
-</EXAMPLE>
-
-You are a shell command generation assistant. 
-Your task is to generate a single shell command based on the user's request. 
-You should not provide any additional text or explanations outside of the command itself. 
-If you need to reason about the request, use the <thoughts> tag to provide your reasoning, but do not include it in the final command output.
-EOF
-  # Make the prompt available globally
-  export SHELP_EXEMPLAR_PROMPT="$exemplar_prompt"
-}
-
-# Initialize the exemplar prompt when script loads
-shelp_exemplar
-
-shelp() {
-    local info="$(uname -a)"
-    local system_prompt="\n<SYSTEM>\n\n$info\n</SYSTEM>\n$SHELP_EXEMPLAR_PROMPT\n\n\nWrite a single shell command to accomplish the following task:\n\n"
-    local thinking=false raw=false execute=false edit=false continue_conversation=false inception=false
-    local state_file="/tmp/shelp_last_execution.log"
-    local piped_content=""
-    local think_model=""
-    local args=()
-
-    # Handle piped input
-    if [ ! -t 0 ]; then
-        piped_content=$(cat)
-    fi
-
-    # Check if continuing conversation
-    local temp_args=("$@")
-    for arg in "${temp_args[@]}"; do
-        if [[ "$arg" == "-c" ]]; then
-            continue_conversation=true
-            break
-        fi
-    done
-
-    if [ "$continue_conversation" = true ] && [[ -f "$state_file" ]]; then
-        local last_execution_output
-        last_execution_output=$(cat "$state_file")
-        if [[ -n "$last_execution_output" ]]; then
-            piped_content+="$(printf "<LAST_COMMAND_OUTPUT>\n%s\n</LAST_COMMAND_OUTPUT>\n\n" "$last_execution_output")"
-        fi
-        true > "$state_file"
-    fi
-
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --think) thinking=true ;;
-            --raw) raw=true ;;
-            -x|--execute) execute=true ;;
-            -e|--edit) edit=true ;;
-            -i|--inception) inception=true ;;
-            -tm|--thinking-model)
-                if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-                    think_model="$2"
-                    thinking=true
-                    shift
-                else
-                    echo "Error: $1 requires a model name" >&2
-                    return 1
-                fi ;;
-            *) args+=("$1") ;;
-        esac
-        shift
-    done
-    
-    # If inception is enabled, add the exemplar prompt to the system prompt
-    [ "$inception" = true ] && system_prompt="$(which shelp)"
-
-    # Thinking step
-    if [ "$thinking" = true ]; then
-        local cot_llm_args=()
-        [[ -n "$think_model" ]] && cot_llm_args+=("-m" "$think_model")
-        prompt="$(echo -e "$system_prompt\n\n$piped_content")"
-        reasoning=$(echo -e "$prompt" | structured_chain_of_thought --raw "${args[@]}" "${cot_llm_args[@]}")
-        if [[ -n "$reasoning" ]]; then
-            system_prompt+="<thoughts>\n$reasoning\n</thoughts>"
-        else
-            echo "Error: No reasoning provided" >&2
-            return 1
-        fi
-    fi
-
-    # Get LLM response
-    response=$(echo -e "$piped_content" | llm -s "$system_prompt" --no-stream "${args[@]}")
-
-    if [ "$raw" = true ]; then
-        echo "$response"
-        return
-    fi
-
-    # Extract shell command
-    local shelllm_commands=""
-    for lang in zsh bash ''; do
-        shelllm_commands="$(echo -E "$response" | awk "BEGIN{RS=\"\`\`\`$lang\"} NR==2" | awk "BEGIN{RS=\"\`\`\`\"} NR==1" | sed '/^ *#/d;/^$/d')"
-        [[ -n "$shelllm_commands" ]] && break
-    done
-
-    if [[ -z "$shelllm_commands" ]]; then
-        if [[ -n "$response" ]]; then
-            error="Warning: Could not extract Zsh or Bash command from LLM response."
-            echo "$error" >&2
-            echo "Raw LLM response:" >&2
-            echo "$response" >&2
-        else
-            echo "Error: LLM returned an empty response. No command to extract." >&2
-        fi
-        return 1
-    fi
-    # Mode handling
-    if [ "$execute" = true ]; then
-      # Print command for visibility
-      echo "$shelllm_commands"
-
-      # Add command to history
-      if [[ -n "$ZSH_VERSION" ]]; then
-        # For Zsh
-        print -s "$shelllm_commands"
-      elif [[ -n "$BASH_VERSION" ]]; then
-        # For Bash
-        history -s "$shelllm_commands"
-      fi
-
-      # Execute the command, capture its output/error, and display it  
-      local execution_output
-      execution_output=$(eval "$shelllm_commands" 2>&1)
-      echo "$execution_output"
-      # Save the output for a potential subsequent shelp call with -c
-      echo "$execution_output" > "$state_file"
-    elif [ "$edit" = true ]; then
-      if [[ -n "$ZSH_VERSION" ]]; then
-        print -r -z "$shelllm_commands"
-      elif [[ -n "$BASH_VERSION" ]]; then
-        # In Bash, just print it for copy-paste
-        echo "$shelllm_commands"
-      fi
-    else
-      echo "$shelllm_commands"
-    fi
-}
-
-
-
-# Update aliases to use the new flags
-alias shelp-x='shelp --execute'
-alias shelp-e='shelp --edit'
-alias shelp-p='shelp --edit'
-alias shelp-c='shelp --edit'
 
 
 commit_generator() {
@@ -719,7 +557,7 @@ prompt_engineer() {
         ;;
       (--raw) raw=true ;;
       (--analysis) show_analysis=true ;;
-      (*) args+=("$1") ;;
+      *) args+=("$1") ;;
     esac
     shift
   done
@@ -786,106 +624,6 @@ prompt_engineer() {
     echo "$response"
     return 1
   fi
-}
-
-
-
-structured_chain_of_thought() {
-  # Breaks down complex problems using structured reasoning steps.
-  # Usage: structured_chain_of_thought <problem description> [--think=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--steps=<steps>]
-  #        cat problem.txt | structured_chain_of_thought [--think=none|minimal|moderate|detailed|comprehensive] [-m MODEL_NAME] [--steps=<steps>]
-  # Options:
-  #   --think=LEVEL       Control reasoning depth (none, minimal, moderate, detailed, comprehensive)
-  #   -m MODEL_NAME          Specify which LLM model to use
-  #   --steps=STEPS          Define custom reasoning steps (comma-separated)
-  #   --raw                  Return the raw LLM response
-  
-  local system_prompt="You are a reasoning assistant that helps break down complex problems through structured thinking. Your COT reasoning trace is then passed to another LLM to generate the actual answer. Follow these steps meticulously:
-
-1.  **Problem Understanding**:
-    *   Restate the problem in your own words to confirm understanding.
-    *   *Example*: \"The user is asking to [specific task], which requires [key elements].\"
-    *   Validate alignment with the user’s intent before proceeding.
-2.  **Approach Planning**:
-    *   Outline a clear, step-by-step strategy using bullet points.
-    *   *Example*: \"1. Gather relevant data. 2. Apply [method]. 3. Validate results.\"
-    *   Justify why this approach is suitable.
-3.  **Step-by-Step Reasoning**:
-    *   Execute your plan with numbered steps, showing calculations/logic.
-    *   *Example*: \"Step 1: [Action]. Step 2: [Calculation].\"
-    *   Highlight assumptions and potential pitfalls.
-4.  **Alternative Perspectives**:
-    *   Propose 1-2 distinct approaches or critiques of your main method.
-    *   *Example*: \"Alternative 1: Use [method X] for better accuracy. Con: Requires more time.\"
-    *   *Example*: \"Critique: The main approach may overlook [aspect Y].\"
-
-**Formatting Rules**:
-
-*   Use XML tags exactly as specified:
-    <problem_understanding>...</problem_understanding>
-    <approach>...</approach>
-    <reasoning>...</reasoning>
-    <alternatives>...</alternatives>
-*   Avoid markdown; keep content plain text within tags.
-*   Adjust detail level based on problem complexity (e.g., minimal for simple tasks, detailed for ambiguous problems).
-
-**Important Notes**: DO NOT write a final answer or conclusion. Your task is to provide a structured breakdown of the problem and reasoning process. The final answer will be generated separately.
-"
-
-  local args=()
-  local raw=false
-
-  # Check if input is being piped
-  if [ ! -t 0 ]; then
-    local piped_content
-    piped_content=$(cat)
-  fi
-  
-  # Process arguments
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --task)
-        if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-          task="$2"
-          system_prompt+="\n<task>\n$task\n</task>\n"
-          shift
-        else
-          echo "Error: --task requires a task description" >&2
-          return 1
-        fi
-        ;;
-      --raw)
-        raw=true
-        ;;
-      *)
-        args+=("$1")
-        ;;
-    esac
-    shift
-  done
-
-  response=$(echo -e "$piped_content" | llm -s $system_prompt --no-stream "${args[@]}")
-  
-  # Return raw response if requested
-  if [ "$raw" = true ]; then
-    echo "$response"
-    return
-  fi
-  
-  # Extract sections
-  problem_understanding="$(echo "$response" | awk 'BEGIN{RS="<problem_understanding>"} NR==2' | awk 'BEGIN{RS="</problem_understanding>"} NR==1')"
-  approach="$(echo "$response" | awk 'BEGIN{RS="<approach>"} NR==2' | awk 'BEGIN{RS="</approach>"} NR==1')"
-  reasoning="$(echo "$response" | awk 'BEGIN{RS="<reasoning>"} NR==2' | awk 'BEGIN{RS="</reasoning>"} NR==1')"
-  alternatives="$(echo "$response" | awk 'BEGIN{RS="<alternatives>"} NR==2' | awk 'BEGIN{RS="</alternatives>"} NR==1')"
-  conclusion="$(echo "$response" | awk 'BEGIN{RS="<conclusion>"} NR==2' | awk 'BEGIN{RS="</conclusion>"} NR==1')"
-  
-  
-  # Display formatted output
-  echo -e "\033[1;36m🔍 PROBLEM UNDERSTANDING:\033[0m\n$problem_understanding\n"
-  echo -e "\033[1;33m🧩 APPROACH:\033[0m\n$approach\n"
-  echo -e "\033[1;32m⚙️ REASONING:\033[0m\n$reasoning\n"
-  echo -e "\033[1;35m🔄 ALTERNATIVE PERSPECTIVES:\033[0m\n$alternatives\n"
-  echo -e "\033[1;31m✅ CONCLUSION:\033[0m\n$conclusion"
 }
 
 llm_smell_detector() {

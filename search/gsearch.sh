@@ -73,13 +73,13 @@ select_llm_model_for_task() {
     # Define models for content extraction (per-URL analysis)
     # Using OpenRouter models for broader accessibility, ensure `llm-openrouter` plugin is installed
     local extract_small_plugin="llm-openrouter"
-    local extract_small_model="cerebras-llama-4-scout-17b-16e-instruct" # Or any small, fast model
+    local extract_small_model="cerebras-scout-4" # Or any small, fast model
     local extract_large_plugin="llm-openrouter"
     local extract_large_model="openrouter/google/gemini-2.5-flash-preview-05-20" # Good for larger context
 
     # Define models for meta-summarization (aggregate summary)
     local summarize_small_plugin="llm-openrouter"
-    local summarize_small_model="cerebras-llama-4-scout-17b-16e-instruct" # Mid-size for smaller summaries
+    local summarize_small_model="cerebras-scout-4" # Mid-size for smaller summaries
     local summarize_large_plugin="llm-openrouter"
     local summarize_large_model="openrouter/google/gemini-2.5-flash-preview-05-20" # Good for very large context summarization
 
@@ -407,13 +407,13 @@ process_url() {
           --arg status "$1" \
           --arg processing_mode "$2" \
           --arg search_query_context "$original_search_text" \
-          --argtimestamp "$timestamp" \
+          --arg timestamp "$timestamp" \
           --arg error_message "$3" \
-          --argjson llm_analysis "${4:-null}" \
+          --arg json llm_analysis "${4:-null}" \
           --arg raw_text "${5:-""}" \
           '{url: $url, status: $status, processing_mode: $processing_mode, search_query_context: $search_query_context, timestamp: $timestamp, data: {error_message: (if $error_message == "" then null else $error_message end), llm_analysis: $llm_analysis, raw_text: (if $raw_text == "" then null else $raw_text end)}}'
         return
-    } # <-- added missing closing brace for _build_json_output
+    } 
 
     local page_content
     # Try fetching with a timeout and retries
